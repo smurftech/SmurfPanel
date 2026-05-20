@@ -232,6 +232,8 @@ class WebAPI:
         self.sink_input_map = {}
         self.sink_inputs = []
         self.app_options = []
+        self.raw_events = []
+        self.raw_event_limit = 100
         self.prev_analogs = [None, None, None, None]
         self.prev_buttons = [0, 0, 0, 0]
         self.latest_event = {
@@ -310,9 +312,30 @@ class WebAPI:
                 with self.lock:
                     self.process_input_event(item)
                     self.latest_event.update(item)
+                    self.raw_events.append({
+                        'timestamp': time.time(),
+                        'raw': item.get('raw'),
+                        'first6': item.get('first6'),
+                        'event_type': item.get('event_type'),
+                        'event_target': item.get('event_target'),
+                        'event_value': item.get('event_value'),
+                        'buttons': item.get('buttons'),
+                        'analogs': item.get('analogs'),
+                    })
+                    if len(self.raw_events) > self.raw_event_limit:
+                        self.raw_events = self.raw_events[-self.raw_event_limit:]
             except Exception:
                 pass
             time.sleep(0.1)
+
+    def get_raw_events(self):
+        with self.lock:
+            return {'raw_events': list(self.raw_events)}
+
+    def clear_raw_events(self):
+        with self.lock:
+            self.raw_events = []
+        return {'success': True}
 
     def update_sink_inputs(self):
         with self.lock:
@@ -373,6 +396,7 @@ class WebAPI:
                 'latest_event': self.latest_event,
                 'dial_states': dial_states,
                 'sink_inputs': self.sink_inputs,
+                'raw_events': self.raw_events[-20:],
             }
 
     def set_target(self, dial_index, target):

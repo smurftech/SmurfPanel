@@ -157,6 +157,14 @@
             <h2>Active Application Streams</h2>
             <div id="appsList" class="apps-list"></div>
         </div>
+
+        <div class="card">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <h2 style="margin:0;">Raw USB Events</h2>
+                <button class="small-button" style="padding: 8px 10px;" onclick="clearRawEvents()">Clear</button>
+            </div>
+            <div id="rawEventLog" class="apps-list"></div>
+        </div>
     </div>
 
     <footer>
@@ -258,6 +266,28 @@
                 noApps.textContent = 'No active application streams found.';
                 appsList.appendChild(noApps);
             }
+
+            const rawEventLog = document.getElementById('rawEventLog');
+            rawEventLog.innerHTML = '';
+            if (state.raw_events && state.raw_events.length > 0) {
+                state.raw_events.forEach(ev => {
+                    const card = document.createElement('div');
+                    card.className = 'app-chip';
+                    const summary = document.createElement('div');
+                    summary.innerHTML = `<strong>${new Date(ev.timestamp * 1000).toLocaleTimeString()}</strong> ${ev.first6 || '--'} ${ev.event_type || '--'} ${ev.event_target || ''} ${ev.event_value !== null ? `=${ev.event_value}` : ''}`;
+                    const details = document.createElement('div');
+                    details.className = 'tiny';
+                    details.textContent = `raw=${ev.raw || '--'} buttons=${ev.buttons ? ev.buttons.join('') : '--'} analogs=${ev.analogs ? ev.analogs.join(',') : '--'}`;
+                    card.appendChild(summary);
+                    card.appendChild(details);
+                    rawEventLog.appendChild(card);
+                });
+            } else {
+                const noEvents = document.createElement('div');
+                noEvents.className = 'tiny';
+                noEvents.textContent = 'No raw USB events logged yet.';
+                rawEventLog.appendChild(noEvents);
+            }
         }
 
         function loadState() {
@@ -297,6 +327,18 @@
                 promises.push(window.pywebview.api.set_target(i, value));
             }
             Promise.all(promises).then(loadState);
+        }
+
+        function clearRawEvents() {
+            if (!window.pywebview) {
+                return;
+            }
+            window.pywebview.api.clear_raw_events().then(result => {
+                if (!result.success) {
+                    console.warn('Failed to clear raw events');
+                }
+                loadState();
+            });
         }
 
         buildDialRows();
