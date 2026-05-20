@@ -27,4 +27,5 @@ python-six
 python-packaging
 python-gunicorn
 python-psycopg2
+python-pywebview
 tk

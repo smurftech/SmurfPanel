@@ -1,0 +1,309 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PCPanel Webview</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f1f4f8;
+            color: #1c2433;
+        }
+        header {
+            background: #1f6feb;
+            color: white;
+            padding: 18px 24px;
+        }
+        header h1 {
+            margin: 0;
+            font-size: 1.4rem;
+        }
+        .container {
+            padding: 18px 24px;
+            display: grid;
+            gap: 18px;
+        }
+        .grid {
+            display: grid;
+            gap: 14px;
+        }
+        .card {
+            background: white;
+            border: 1px solid #d7dee9;
+            border-radius: 12px;
+            padding: 18px;
+            box-shadow: 0 8px 20px rgba(22, 33, 60, 0.05);
+        }
+        .dial-row {
+            display: grid;
+            grid-template-columns: 100px 90px 1fr 180px 120px;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 12px;
+        }
+        .dial-row .target-label {
+            display: block;
+            font-size: 0.85rem;
+            color: #5f7285;
+            margin-top: 4px;
+        }
+        .section-title {
+            margin: 0 0 10px;
+            font-size: 1rem;
+            color: #1f3f80;
+        }
+        .dial-row:last-child {
+            margin-bottom: 0;
+        }
+        .dial-label {
+            font-weight: 700;
+        }
+        .value-pill {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid #d7dee9;
+            background: #f8fbff;
+            color: #1f3f80;
+            min-width: 70px;
+        }
+        select, button {
+            font-size: 0.95rem;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid #cbd5e1;
+            background: white;
+            color: #1b2738;
+        }
+        select {
+            width: 100%;
+        }
+        button {
+            cursor: pointer;
+            transition: background 0.2s ease;
+        }
+        button:hover {
+            background: #eef3ff;
+        }
+        .status-card {
+            display: grid;
+            gap: 12px;
+        }
+        .status-item {
+            display: grid;
+            grid-template-columns: 110px 1fr;
+            gap: 12px;
+        }
+        .status-item span:first-child {
+            font-weight: 700;
+        }
+        .apps-list {
+            display: grid;
+            gap: 10px;
+        }
+        .app-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 999px;
+            background: #eef4ff;
+            border: 1px solid #d7dee9;
+        }
+        .app-chip__name {
+            font-weight: 600;
+        }
+        .tiny {
+            font-size: 0.9rem;
+            color: #5f7285;
+        }
+        footer {
+            background: #fff;
+            padding: 15px 24px;
+            border-top: 1px solid #d7dee9;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .small-button {
+            background: #1f6feb;
+            color: white;
+            border: none;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>PCPanel Web Interface</h1>
+    </header>
+    <div class="container">
+        <div class="card status-card">
+            <div class="status-item"><span>System Volume</span><span id="systemVolume">--</span></div>
+            <div class="status-item"><span>System Muted</span><span id="systemMuted">--</span></div>
+            <div class="status-item"><span>USB Event</span><span id="eventSummary">--</span></div>
+            <div class="status-item"><span>Last Refresh</span><span id="lastUpdate">--</span></div>
+        </div>
+
+        <div class="card" id="dialsCard">
+            <div class="grid" id="dialRows"></div>
+        </div>
+
+        <div class="card">
+            <h2>Active Application Streams</h2>
+            <div id="appsList" class="apps-list"></div>
+        </div>
+    </div>
+
+    <footer>
+        <span class="tiny">Built as a simple webview-based interface for the PCPanel device.</span>
+        <div>
+            <button class="small-button" onclick="loadState()">Refresh</button>
+            <button class="small-button" onclick="resetTargets()" style="margin-left:10px;">Reset</button>
+        </div>
+    </footer>
+
+    <script>
+        const dialCount = 4;
+        function createDialRow(index) {
+            const container = document.createElement('div');
+            container.className = 'dial-row';
+            const dialLabel = document.createElement('div');
+            dialLabel.className = 'dial-label';
+            dialLabel.textContent = `Dial ${index + 1}`;
+            const currentValue = document.createElement('div');
+            currentValue.className = 'value-pill';
+            currentValue.id = `dialValue${index}`;
+            currentValue.textContent = '--';
+            const selector = document.createElement('select');
+            selector.id = `target${index}`;
+            selector.onchange = () => setTarget(index);
+            const muteButton = document.createElement('button');
+            muteButton.textContent = 'Toggle mute';
+            muteButton.onclick = () => toggleMute(index);
+            const info = document.createElement('div');
+            info.id = `targetInfo${index}`;
+            info.className = 'tiny';
+            info.textContent = 'No target';
+            container.appendChild(dialLabel);
+            container.appendChild(currentValue);
+            container.appendChild(selector);
+            container.appendChild(info);
+            container.appendChild(muteButton);
+            return container;
+        }
+
+        function buildDialRows() {
+            const dialRows = document.getElementById('dialRows');
+            dialRows.innerHTML = '';
+            for (let i = 0; i < dialCount; i += 1) {
+                dialRows.appendChild(createDialRow(i));
+            }
+        }
+
+        function renderState(state) {
+            document.getElementById('systemVolume').textContent = state.system_volume !== null ? `${state.system_volume}%` : 'N/A';
+            document.getElementById('systemMuted').textContent = state.system_muted === null ? 'N/A' : (state.system_muted ? 'Yes' : 'No');
+            document.getElementById('eventSummary').textContent = state.latest_event.event_type ? `${state.latest_event.event_type} ${state.latest_event.event_target} = ${state.latest_event.event_value}` : '--';
+
+            state.targets.forEach((target, idx) => {
+                const select = document.getElementById(`target${idx}`);
+                select.innerHTML = '';
+                state.options.forEach(option => {
+                    const opt = document.createElement('option');
+                    opt.value = option;
+                    opt.textContent = option;
+                    if (option === target) {
+                        opt.selected = true;
+                    }
+                    select.appendChild(opt);
+                });
+                const dialState = state.dial_states ? state.dial_states[idx] : null;
+                document.getElementById(`dialValue${idx}`).textContent = dialState && dialState.volume !== null ? `${dialState.volume}%` : '--';
+                const infoEl = document.getElementById(`targetInfo${idx}`);
+                if (dialState) {
+                    const label = dialState.type === 'system' ? 'System' : dialState.type === 'app' ? 'App' : 'No target';
+                    const volText = dialState.volume !== null ? `${dialState.volume}%` : '--';
+                    const muteText = dialState.mute === null ? '' : (dialState.mute ? 'Muted' : 'Unmuted');
+                    infoEl.textContent = `${label}: ${volText}${muteText ? ` · ${muteText}` : ''}`;
+                } else {
+                    infoEl.textContent = 'No target';
+                }
+            });
+            document.getElementById('lastUpdate').textContent = new Date().toLocaleTimeString();
+
+            const appsList = document.getElementById('appsList');
+            appsList.innerHTML = '';
+            if (state.sink_inputs && state.sink_inputs.length > 0) {
+                state.sink_inputs.forEach(stream => {
+                    const chip = document.createElement('div');
+                    chip.className = 'app-chip';
+                    const name = document.createElement('span');
+                    name.className = 'app-chip__name';
+                    name.textContent = `${stream.id}: ${stream.name}`;
+                    const meta = document.createElement('span');
+                    meta.className = 'tiny';
+                    meta.textContent = `${stream.volume !== null ? stream.volume + '%' : '--'} · ${stream.mute ? 'Muted' : 'Unmuted'}`;
+                    chip.appendChild(name);
+                    chip.appendChild(meta);
+                    appsList.appendChild(chip);
+                });
+            } else {
+                const noApps = document.createElement('div');
+                noApps.className = 'tiny';
+                noApps.textContent = 'No active application streams found.';
+                appsList.appendChild(noApps);
+            }
+        }
+
+        function loadState() {
+            if (!window.pywebview) {
+                console.error('pywebview is not available.');
+                return;
+            }
+            window.pywebview.api.get_state().then(state => {
+                renderState(state);
+            });
+        }
+
+        function setTarget(index) {
+            const select = document.getElementById(`target${index}`);
+            window.pywebview.api.set_target(index, select.value).then(loadState);
+        }
+
+        function toggleMute(index) {
+            if (!window.pywebview) {
+                return;
+            }
+            window.pywebview.api.toggle_mute(index).then(result => {
+                if (!result.success) {
+                    console.warn('Mute toggle failed:', result.message);
+                }
+                loadState();
+            });
+        }
+
+        function resetTargets() {
+            if (!window.pywebview) {
+                return;
+            }
+            const promises = [];
+            for (let i = 0; i < dialCount; i += 1) {
+                const value = i === 0 ? 'System' : 'None';
+                promises.push(window.pywebview.api.set_target(i, value));
+            }
+            Promise.all(promises).then(loadState);
+        }
+
+        buildDialRows();
+        document.addEventListener('DOMContentLoaded', () => {
+            loadState();
+            setInterval(loadState, 2000);
+        });
+    </script>
+</body>
+</html>

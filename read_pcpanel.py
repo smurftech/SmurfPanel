@@ -56,6 +56,11 @@ def claim_interface(dev, interface):
                 "The device is busy or another process/driver is using it. "
                 "Try running with sudo or stop the conflicting process."
             )
+        if getattr(e, 'errno', None) in (errno.EACCES, errno.EPERM) or 'Access denied' in str(e):
+            raise RuntimeError(
+                f"Could not claim interface {interface}: permission denied. "
+                "Run as root or add a udev rule for 0483:a3c4."
+            )
         raise RuntimeError(f"Could not claim interface {interface}: {e}")
 
 

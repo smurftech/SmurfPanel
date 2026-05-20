@@ -9,10 +9,14 @@ Simple Tkinter GUI for the PCPanel Mini (0483:a3c4).
 Adjust parsing in `parse_report` if your device uses a different report layout.
 """
 
+import json
+import os
 import sys
 import threading
 import queue
 import time
+import subprocess
+import re
 import usb.core
 import usb.util
 import errno
@@ -22,6 +26,7 @@ from tkinter import ttk, filedialog
 VENDOR_ID = 0x0483
 PRODUCT_ID = 0xa3c4
 READ_TIMEOUT = 500  # ms
+CONFIG_FILE = os.path.expanduser('~/.config/pcpanel_gui/mappings.json')
 
 
 def find_device():
@@ -187,6 +192,9 @@ class USBReaderThread(threading.Thread):
                     except Exception as e2:
                         self.out_q.put({"error": f"set_configuration failed after detach: {e2}"})
                         return
+                elif getattr(e, 'errno', None) in (errno.EACCES, errno.EPERM) or 'Access denied' in str(e):
+                    self.out_q.put({"error": "Permission denied accessing USB device. Run as root or add a udev rule for 0483:a3c4."})
+                    return
                 else:
                     self.out_q.put({"error": f"set_configuration failed: {e}"})
                     return
@@ -240,6 +248,9 @@ class USBReaderThread(threading.Thread):
                     if getattr(e, 'errno', None) == errno.EBUSY:
                         self.out_q.put({"error": "Resource busy (EBUSY)"})
                         break
+                    if getattr(e, 'errno', None) in (errno.EACCES, errno.EPERM) or 'Access denied' in str(e):
+                        self.out_q.put({"error": "Permission denied accessing USB device. Run as root or add a udev rule for 0483:a3c4."})
+                        break
                     # other errors: report then break
                     self.out_q.put({"error": f"USB error: {e}"})
                     break
@@ -265,6 +276,14 @@ class App(tk.Tk):
         self.stop_event = threading.Event()
         self.reader = None
         self.log = []  # list of (timestamp, raw, buttons, analogs)
+        # track previous states to detect changes/edge transitions
+        self.prev_buttons = [0, 0, 0, 0]
+        self.prev_analogs = [0, 0, 0, 0]
+        # per-dial mapping: -1 = system, None = no mapping, int = sink-input index
+        self.dial_sink_map = [-1, None, None, None]
+        # map display string -> sink-input index
+        self.sink_input_map = {}
+        self.saved_dial_targets = self.load_saved_dial_targets()
 
         # Controls
         ctrl_frame = ttk.Frame(self)
@@ -304,6 +323,26 @@ class App(tk.Tk):
             ttk.Label(analog_frame, text=f"Dial {i+1}").grid(row=0, column=i, padx=6)
             ttk.Progressbar(analog_frame, orient='vertical', length=120, maximum=255, variable=self.analog_vars[i]).grid(row=1, column=i, padx=6)
             ttk.Label(analog_frame, textvariable=self.analog_vars[i]).grid(row=2, column=i, padx=6)
+
+        # Application mapping for dials 1..4
+        sink_map_frame = ttk.LabelFrame(self, text="Per-Dial Target")
+        sink_map_frame.pack(fill='x', padx=8, pady=4)
+        values = self.saved_dial_targets
+        if len(values) != 4:
+            values = ['System', 'None', 'None', 'None']
+        self.app_combobox_vars = [tk.StringVar(value=values[i]) for i in range(4)]
+        self.app_comboboxes = [None, None, None, None]
+        for i in range(4):
+            ttk.Label(sink_map_frame, text=f"Dial {i+1} target").grid(row=0, column=i, padx=6)
+            cb = ttk.Combobox(sink_map_frame, textvariable=self.app_combobox_vars[i], state='readonly', width=24)
+            cb['values'] = ['System', 'None']
+            cb.grid(row=1, column=i, padx=6)
+            # bind with a lambda capturing index
+            cb.bind('<<ComboboxSelected>>', lambda e, idx=i: self.on_app_selected(idx, e))
+            self.app_comboboxes[i] = cb
+
+        # start periodic refresh of sink-inputs
+        self.after(1500, self.refresh_sink_inputs)
 
         # Status
         self.status_var = tk.StringVar(value='Idle')
@@ -349,12 +388,58 @@ class App(tk.Tk):
                         self.event_var.set(f"{event_type} {event_target} = {event_value}")
                     else:
                         self.event_var.set('-')
+                    if event_type == 'dial' and event_target and 'Dial' in event_target:
+                        try:
+                            m = re.search(r'Dial\s*(\d+)', event_target)
+                            if m:
+                                dial_num = int(m.group(1))
+                                if 1 <= dial_num <= 4:
+                                    val = int(event_value) if event_value is not None else None
+                                    if val is not None:
+                                        percent = int(val * 100 / 255)
+                                        if percent != self.prev_analogs[dial_num-1]:
+                                            sink_idx = self.dial_sink_map[dial_num-1]
+                                            if sink_idx == -1:
+                                                try:
+                                                    subprocess.run(['pactl', 'set-sink-volume', '@DEFAULT_SINK@', f'{percent}%'], check=True, timeout=1)
+                                                    self.status_var.set(f'Dial {dial_num} -> System {percent}%')
+                                                except Exception as e:
+                                                    self.status_var.set(f'Error setting system volume: {e}')
+                                            elif sink_idx is not None:
+                                                try:
+                                                    subprocess.run(['pactl', 'set-sink-input-volume', str(sink_idx), f'{percent}%'], check=True, timeout=1)
+                                                    self.status_var.set(f'Dial {dial_num} -> App {percent}%')
+                                                except Exception as e:
+                                                    self.status_var.set(f'Error setting app volume: {e}')
+                                            self.prev_analogs[dial_num-1] = percent
+                        except Exception:
+                            pass
                     # append to log with timestamp
                     ts = time.time()
                     self.log.append((ts, item))
                 buttons = item.get('buttons')
                 if buttons is not None:
+                    # Only treat toggle actions when the event is a real button event
+                    is_button_event = (event_type == 'button')
                     for i, val in enumerate(buttons):
+                        if is_button_event:
+                            prev = self.prev_buttons[i]
+                            if val and not prev:
+                                sink_idx = self.dial_sink_map[i]
+                                if sink_idx == -1:
+                                    try:
+                                        subprocess.run(['pactl', 'set-sink-mute', '@DEFAULT_SINK@', 'toggle'], check=True, timeout=1)
+                                        self.status_var.set(f'Toggled system mute (Dial {i+1})')
+                                    except Exception as e:
+                                        self.status_var.set(f'Error toggling system mute: {e}')
+                                elif sink_idx is not None:
+                                    try:
+                                        subprocess.run(['pactl', 'set-sink-input-mute', str(sink_idx), 'toggle'], check=True, timeout=1)
+                                        self.status_var.set(f'Toggled app mute (Dial {i+1})')
+                                    except Exception as e:
+                                        self.status_var.set(f'Error toggling app mute: {e}')
+                            self.prev_buttons[i] = int(bool(val))
+                        # always update UI display for buttons
                         self.button_vars[i].set('ON' if val else 'OFF')
                 analogs = item.get('analogs')
                 if analogs is not None:
@@ -402,7 +487,105 @@ class App(tk.Tk):
         except Exception as e:
             self.status_var.set(f'Error saving log: {e}')
 
+    def load_saved_dial_targets(self):
+        try:
+            with open(CONFIG_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                targets = data.get('dial_targets')
+                if isinstance(targets, list) and len(targets) == 4:
+                    return targets
+        except Exception:
+            pass
+        return ['System', 'None', 'None', 'None']
+
+    def save_dial_targets(self):
+        try:
+            os.makedirs(os.path.dirname(CONFIG_FILE), exist_ok=True)
+            with open(CONFIG_FILE, 'w', encoding='utf-8') as f:
+                json.dump({'dial_targets': [self.app_combobox_vars[i].get() for i in range(4)]}, f, indent=2)
+        except Exception:
+            pass
+
+    def refresh_sink_inputs(self):
+        """Refresh list of active application sink-inputs and update comboboxes."""
+        try:
+            p = subprocess.run(['pactl', 'list', 'sink-inputs'], capture_output=True, text=True, timeout=2)
+            out = p.stdout
+        except Exception:
+            out = ''
+        entries = []
+        self.sink_input_map.clear()
+        cur_idx = None
+        cur_name = None
+        for line in out.splitlines():
+            m_idx = re.match(r'\s*Sink Input #(\d+)', line)
+            if m_idx:
+                if cur_idx is not None and cur_name:
+                    disp = f"{cur_idx}: {cur_name}"
+                    entries.append(disp)
+                    self.sink_input_map[disp] = int(cur_idx)
+                cur_idx = m_idx.group(1)
+                cur_name = None
+                continue
+            if cur_idx is not None:
+                m_app = re.match(r'\s*application.name\s*=\s*"(.+)"', line)
+                if m_app:
+                    cur_name = m_app.group(1)
+                    continue
+                m_media = re.match(r'\s*media.name\s*=\s*"(.+)"', line)
+                if m_media and not cur_name:
+                    cur_name = m_media.group(1)
+                    continue
+        # append last
+        if cur_idx is not None and cur_name:
+            disp = f"{cur_idx}: {cur_name}"
+            entries.append(disp)
+            self.sink_input_map[disp] = int(cur_idx)
+
+        values = ['System', 'None'] + entries
+        # update combobox values
+        for i in range(4):
+            cb = self.app_comboboxes[i]
+            if cb is None:
+                continue
+            try:
+                cb['values'] = values
+            except Exception:
+                pass
+            cur = self.app_combobox_vars[i].get()
+            if cur not in values:
+                # clear mapping
+                self.app_combobox_vars[i].set('None')
+                self.dial_sink_map[i] = None
+            else:
+                # set mapping to current selection
+                if cur == 'None':
+                    self.dial_sink_map[i] = None
+                elif cur == 'System':
+                    self.dial_sink_map[i] = -1
+                else:
+                    self.dial_sink_map[i] = self.sink_input_map.get(cur)
+
+        # schedule next refresh
+        self.after(2000, self.refresh_sink_inputs)
+
+    def on_app_selected(self, dial_index, event=None):
+        """Handle user selection in combobox for dial_index."""
+        try:
+            sel = self.app_combobox_vars[dial_index].get()
+            if sel == 'None':
+                self.dial_sink_map[dial_index] = None
+            elif sel == 'System':
+                self.dial_sink_map[dial_index] = -1
+            else:
+                self.dial_sink_map[dial_index] = self.sink_input_map.get(sel)
+            self.status_var.set(f'Dial {dial_index+1} mapped to {sel}')
+            self.save_dial_targets()
+        except Exception:
+            pass
+
     def on_close(self):
+        self.save_dial_targets()
         self.stop_event.set()
         time.sleep(0.2)
         self.destroy()
