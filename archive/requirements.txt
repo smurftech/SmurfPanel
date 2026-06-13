@@ -1,0 +1,31 @@
+# Arch Linux package names for equivalent Python packages
+# Install with:
+# sudo pacman -S python-pyusb python-requests python-urllib3 python-numpy python-pandas python-yaml python-dotenv python-click python-flask python-fastapi python-uvicorn python-jinja python-sqlalchemy python-alembic python-pydantic python-pytest python-pytest-cov python-black python-mypy python-dateutil python-cryptography python-six python-packaging python-gunicorn python-psycopg2
+
+python-pyusb
+python-requests
+python-urllib3
+python-numpy
+python-pandas
+python-yaml
+python-dotenv
+python-click
+python-flask
+python-fastapi
+python-uvicorn
+python-jinja
+python-sqlalchemy
+python-alembic
+python-pydantic
+python-pytest
+python-pytest-cov
+python-black
+python-mypy
+python-dateutil
+python-cryptography
+python-six
+python-packaging
+python-gunicorn
+python-psycopg2
+python-pywebview
+tk

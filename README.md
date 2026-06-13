@@ -1,84 +1,145 @@
-# PcPanel USB Reader
+# PCPanel
 
-A small Python utility for reading from the STMicroelectronics PCPanel Mini device.
+Clean runtime for a USB controller with four dials and four buttons.
 
-## Requirements
+The original prototype files and USB captures are archived in `archive/`. The
+new implementation is organized around the runtime path:
 
-This project includes Arch Linux package names in `requirements.txt`.
-
-### Install dependencies on Arch Linux
-
-```bash
-sudo pacman -S python-pyusb python-requests python-urllib3 python-numpy python-pandas python-yaml python-dotenv python-click python-flask python-fastapi python-uvicorn python-jinja python-sqlalchemy python-alembic python-pydantic python-pytest python-pytest-cov python-black python-mypy python-dateutil python-cryptography python-six python-packaging python-gunicorn python-psycopg2
+```text
+USB reader -> report parser -> controller -> audio backend -> OSD
 ```
 
-> The `requirements.txt` file also includes the same package names.
+## Current Status
 
-## Usage
+This is the first clean foundation:
 
-Run the USB reader script with Python 3:
+- shared parser for the documented PCPanel report format
+- controller loop separated from UI/debug code
+- `pactl` audio backend as an immediate fallback
+- OSD abstraction, currently logging-only
+- parser and audio-output parsing tests
 
-```bash
-python3 read_pcpanel.py
-```
-
-### Run the webview interface
-
-Use the helper script to create and activate a virtual environment:
+## Run
 
 ```bash
-cd /home/smurftech/GIT_REPOS/PcPanel
-source ./setup_env.sh
+python -m pcpanel
 ```
 
-This creates `.venv`, installs dependencies, and activates the environment.
-
-If you prefer manual installation instead, install the webview dependency and run:
+Run the GUI:
 
 ```bash
-pip install pywebview
-python3 web_pcpanel.py
+python -m pcpanel.gui
 ```
 
-If the default backend is not available, install either GTK or Qt support:
+The GUI starts the same controller path as the CLI, shows live dial movement,
+shows mute state, and edits the config file.
+
+The default config is loaded from:
+
+```text
+~/.config/pcpanel/config.json
+```
+
+If the file does not exist, dial 1 controls the system volume and the other
+dials are unassigned.
+
+Create the default config:
 
 ```bash
-pip install pywebview[gtk] PyGObject
-# or
-pip install pywebview[qt] qtpy PySide6
+python -m pcpanel --init-config
 ```
 
-If you get `ImportError: No module named 'qtpy'`, make sure you are running inside the activated `.venv` created by `source ./setup_env.sh`.
-
-If you are running on Wayland, Qt is usually more reliable than GTK for `pywebview`, so prefer the Qt backend when possible.
-
-This opens a local HTML-based interface backed by the same USB/pactl logic.
-
-If the script cannot find the device, make sure the USB device is connected and that you have permission to access it.
-
-## Notes
-
-- The script uses `pyusb` to communicate with the USB device.
-- Depending on the device, you may need to run the script with `sudo` or update your udev rules to allow non-root USB access.
-- This repository currently contains only a basic example script for the specified `0483:a3c4` STMicroelectronics device.
-
-## udev rule (allow non-root access)
-
-A udev rule is included in `99-pcpanel.rules` to allow members of the `uucp` group to access the device without `sudo`.
-
-Install it system-wide with:
+Print the default config without writing it:
 
 ```bash
-sudo cp 99-pcpanel.rules /etc/udev/rules.d/99-pcpanel.rules
-sudo udevadm control --reload
-sudo udevadm trigger
+python -m pcpanel --print-default-config
 ```
 
-Then add your user to the `uucp` group (log out/in afterwards):
+Run with a config file in the repo while testing:
 
 ```bash
-sudo usermod -aG uucp $USER
+python -m pcpanel -v --config config.example.json
 ```
 
-If you prefer a more permissive rule, open `99-pcpanel.rules` and change `MODE="0660"` to `MODE="0666"`.
+Run the GUI with a specific config:
 
+```bash
+python -m pcpanel.gui -v --config config.example.json
+```
+
+List active application streams:
+
+```bash
+python -m pcpanel --list-streams
+```
+
+## Build Standalone GUI
+
+The app can be bundled with PyInstaller. This produces a self-contained app
+folder for the Python/PySide6 code:
+
+```bash
+python -m PyInstaller pcpanel-gui.spec --clean --noconfirm
+```
+
+The bundled executable is:
+
+```text
+dist/pcpanel-gui/pcpanel-gui
+```
+
+Run it with:
+
+```bash
+./dist/pcpanel-gui/pcpanel-gui
+```
+
+Notes:
+
+- The bundle is still platform-specific. Build it on the Linux distribution you
+  plan to run it on.
+- `pactl` must be available on the target machine.
+- The USB udev rule still needs to be installed so the app can access the device
+  without root.
+- Only one PCPanel process can own the USB interface at a time.
+
+## Config
+
+Each dial target has this shape:
+
+```json
+{
+  "type": "system",
+  "label": "System",
+  "app_name": null,
+  "binary": null,
+  "stream_id": null
+}
+```
+
+Target types:
+
+- `system`: controls the default system output.
+- `app`: controls an application stream. Prefer `binary` or `app_name` over
+  `stream_id`, because stream IDs change when apps restart.
+- `none`: ignores that dial/button.
+
+Example app mapping:
+
+```json
+{
+  "type": "app",
+  "label": "Firefox",
+  "app_name": "Firefox",
+  "binary": "firefox",
+  "stream_id": null
+}
+```
+
+## Next Steps
+
+1. Replace the fallback `pactl` backend with a persistent `pulsectl` backend.
+2. Add a PySide6 transparent always-on-top OSD.
+3. Add saved/stale app targets to the GUI even when an app is not currently playing.
+4. Add USB reconnect handling and optional HID backend if the device exposes HID.
+5. Add a systemd user service for login startup.

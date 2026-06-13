@@ -1,0 +1,34 @@
+{
+  "dials": [
+    {
+      "type": "system",
+      "label": "System",
+      "app_name": null,
+      "binary": null,
+      "stream_id": null
+    },
+    {
+      "type": "none",
+      "label": "None",
+      "app_name": null,
+      "binary": null,
+      "stream_id": null
+    },
+    {
+      "type": "none",
+      "label": "None",
+      "app_name": null,
+      "binary": null,
+      "stream_id": null
+    },
+    {
+      "type": "none",
+      "label": "None",
+      "app_name": null,
+      "binary": null,
+      "stream_id": null
+    }
+  ],
+  "osd_enabled": true,
+  "volume_step_hz": 60
+}
