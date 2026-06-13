@@ -15,7 +15,7 @@ a = Analysis(
     ["scripts/pcpanel_gui.py"],
     pathex=[],
     binaries=[],
-    datas=[],
+    datas=[("pcpanel/assets/pcpanel.svg", "assets")],
     hiddenimports=hiddenimports,
     hookspath=[],
     hooksconfig={},

@@ -18,7 +18,6 @@ from PySide6.QtWidgets import (
     QMenu,
     QPushButton,
     QStatusBar,
-    QStyle,
     QSystemTrayIcon,
     QVBoxLayout,
     QWidget,
@@ -28,6 +27,7 @@ from pcpanel.audio import AudioStream, PactlAudioBackend
 from pcpanel.config import AppConfig, DialTarget, default_config_path, load_config, save_config
 from pcpanel.controller import Controller
 from pcpanel.events import ControlEvent, ControlKind
+from pcpanel.gui.resources import app_icon
 from pcpanel.gui.style import APP_STYLE, CHANNEL_COLORS
 from pcpanel.gui.widgets import ChannelStrip, StreamList
 from pcpanel.usb_reader import PyUsbReader
@@ -59,6 +59,7 @@ class MainWindow(QMainWindow):
         self.tray_icon: QSystemTrayIcon | None = None
 
         self.setWindowTitle("PCPanel")
+        self.setWindowIcon(app_icon())
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
         self.setMinimumSize(900, 560)
         self.setStatusBar(QStatusBar())
@@ -146,7 +147,7 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage("System tray is not available")
             return
 
-        icon = self.style().standardIcon(QStyle.StandardPixmap.SP_ComputerIcon)
+        icon = app_icon()
         self.tray_icon = QSystemTrayIcon(icon, self)
         self.tray_icon.setToolTip("PCPanel")
 

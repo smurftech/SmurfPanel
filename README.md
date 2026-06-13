@@ -94,6 +94,18 @@ Run it with:
 ./dist/pcpanel-gui/pcpanel-gui
 ```
 
+Install it into your user application menu:
+
+```bash
+./scripts/install_desktop.sh
+```
+
+After installing, launch it from your app menu as `PCPanel` or from a terminal:
+
+```bash
+pcpanel-gui
+```
+
 Notes:
 
 - The bundle is still platform-specific. Build it on the Linux distribution you
