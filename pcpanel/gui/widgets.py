@@ -116,8 +116,16 @@ class ChannelStrip(QFrame):
     def set_event(self, event: ControlEvent) -> None:
         self.raw.setText(f"raw: {event.raw[:12]}")
         if event.kind == ControlKind.DIAL:
-            self.meter.setValue(event.percent)
-            self.percent.setText(f"{event.percent}%")
+            self.set_volume_state(event.percent)
+
+    def set_volume_state(self, percent: int | None) -> None:
+        if percent is None:
+            self.meter.setValue(0)
+            self.percent.setText("--%")
+            return
+        percent = max(0, min(100, percent))
+        self.meter.setValue(percent)
+        self.percent.setText(f"{percent}%")
 
     def set_target_label(self, target: DialTarget) -> None:
         self.target_label.setText(target.label)

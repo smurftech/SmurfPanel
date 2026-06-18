@@ -70,6 +70,7 @@ class MainWindow(QMainWindow):
         self._connect_signals()
 
         self.refresh_streams()
+        self.refresh_initial_volumes()
         self.refresh_status()
         self.start_reader()
 
@@ -267,6 +268,20 @@ class MainWindow(QMainWindow):
             else:
                 row.set_mute_state(None)
             row.set_target_label(target)
+
+    def refresh_initial_volumes(self) -> None:
+        try:
+            system_volume = self.audio.get_system_volume()
+        except Exception:
+            system_volume = None
+        stream_by_key = {stream_key(stream): stream for stream in self.streams}
+        for index, row in enumerate(self.rows):
+            target = self.config.dials[index]
+            if target.type == "system":
+                row.set_volume_state(system_volume)
+            elif target.type == "app":
+                stream = stream_by_key.get((target.app_name, target.binary))
+                row.set_volume_state(stream.volume if stream else None)
 
     @Slot(int)
     def on_target_changed(self, index: int) -> None:
