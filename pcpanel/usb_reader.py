@@ -9,6 +9,7 @@ import usb.core
 import usb.util
 
 from pcpanel.events import ControlEvent
+from pcpanel.lighting import send_output_report
 from pcpanel.parser import ReportParseError, parse_report
 
 LOGGER = logging.getLogger(__name__)
@@ -33,17 +34,19 @@ class PyUsbReader(threading.Thread):
         self.product_id = product_id
         self._device = None
         self._interface_number: int | None = None
+        self._device_lock = threading.Lock()
 
     def run(self) -> None:
         try:
             endpoint = self._open_endpoint()
             while not self.stop_event.is_set():
                 try:
-                    data = self._device.read(
-                        endpoint.bEndpointAddress,
-                        endpoint.wMaxPacketSize,
-                        timeout=READ_TIMEOUT_MS,
-                    )
+                    with self._device_lock:
+                        data = self._device.read(
+                            endpoint.bEndpointAddress,
+                            endpoint.wMaxPacketSize,
+                            timeout=READ_TIMEOUT_MS,
+                        )
                 except usb.core.USBError as exc:
                     if getattr(exc, "errno", None) in (errno.ETIMEDOUT, None):
                         continue
@@ -60,6 +63,12 @@ class PyUsbReader(threading.Thread):
             LOGGER.exception("USB reader stopped unexpectedly")
         finally:
             self.close()
+
+    def send_output_report(self, payload: bytes) -> None:
+        if self._device is None:
+            raise RuntimeError("USB device is not open")
+        with self._device_lock:
+            send_output_report(self._device, payload)
 
     def close(self) -> None:
         if self._device is None or self._interface_number is None:

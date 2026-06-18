@@ -1,4 +1,11 @@
-from pcpanel.config import AppConfig, DialTarget, load_config, save_config
+from pcpanel.config import (
+    AppConfig,
+    DialLighting,
+    DialTarget,
+    LightingConfig,
+    load_config,
+    save_config,
+)
 
 
 def test_save_and_load_config(tmp_path) -> None:
@@ -12,6 +19,14 @@ def test_save_and_load_config(tmp_path) -> None:
         ],
         osd_enabled=False,
         volume_step_hz=30,
+        lighting=LightingConfig(
+            dials=[
+                DialLighting(enabled=True, color="#111111"),
+                DialLighting(enabled=False, color="#222222"),
+                DialLighting(enabled=True, color="#333333"),
+                DialLighting(enabled=True, color="#444444"),
+            ]
+        ),
     )
 
     save_config(config, path)
@@ -22,6 +37,8 @@ def test_save_and_load_config(tmp_path) -> None:
     assert loaded.dials[1].type == "app"
     assert loaded.dials[1].label == "Firefox"
     assert loaded.dials[1].binary == "firefox"
+    assert loaded.lighting.dials[1].enabled is False
+    assert loaded.lighting.dials[1].color == "#222222"
 
 
 def test_missing_config_returns_default(tmp_path) -> None:
@@ -29,3 +46,4 @@ def test_missing_config_returns_default(tmp_path) -> None:
 
     assert config.dials[0].type == "system"
     assert config.dials[1].type == "none"
+    assert config.lighting.dials[0].color == "#4DA3FF"

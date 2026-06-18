@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtWidgets import (
+    QCheckBox,
     QComboBox,
     QFrame,
     QHBoxLayout,
@@ -19,6 +20,8 @@ from pcpanel.events import ControlEvent, ControlKind
 class ChannelStrip(QFrame):
     target_changed = Signal(int)
     mute_clicked = Signal(int)
+    led_toggled = Signal(int, bool)
+    led_color_clicked = Signal(int)
 
     def __init__(self, index: int, accent: str) -> None:
         super().__init__()
@@ -71,11 +74,41 @@ class ChannelStrip(QFrame):
         self.target.currentIndexChanged.connect(lambda _value: self.target_changed.emit(self.index))
         layout.addWidget(self.target)
 
+        led_row = QHBoxLayout()
+        led_row.setSpacing(8)
+        self.led_enabled = QCheckBox("LED")
+        self.led_enabled.toggled.connect(
+            lambda enabled: self.led_toggled.emit(self.index, enabled)
+        )
+        self.led_color = QPushButton()
+        self.led_color.setObjectName("ColorSwatch")
+        self.led_color.setFixedSize(34, 28)
+        self.led_color.setCursor(Qt.CursorShape.PointingHandCursor)
+        self.led_color.setToolTip("Choose LED color")
+        self.led_color.clicked.connect(lambda: self.led_color_clicked.emit(self.index))
+        led_row.addWidget(self.led_enabled)
+        led_row.addStretch(1)
+        led_row.addWidget(self.led_color)
+        layout.addLayout(led_row)
+
         self.raw = QLabel("raw: --")
         self.raw.setObjectName("SmallText")
         self.raw.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
         self.raw.setVisible(False)
         layout.addWidget(self.raw)
+
+    def set_led_state(self, enabled: bool, color: str) -> None:
+        self.led_enabled.blockSignals(True)
+        self.led_enabled.setChecked(enabled)
+        self.led_enabled.blockSignals(False)
+        self.led_color.setEnabled(enabled)
+        border = "#303842" if enabled else "#252D35"
+        self.led_color.setStyleSheet(
+            "QPushButton#ColorSwatch { "
+            f"background: {color}; border: 1px solid {border}; border-radius: 6px; padding: 0; "
+            "}"
+        )
+        self.led_color.setToolTip(f"Choose LED color ({color})")
 
     def set_debug_visible(self, visible: bool) -> None:
         self.raw.setVisible(visible)

@@ -1,4 +1,7 @@
-CHANNEL_COLORS = ["#4DA3FF", "#35D0BA", "#A78BFA", "#F7C948"]
+from pcpanel.config import DEFAULT_LIGHTING_COLORS
+
+
+CHANNEL_COLORS = DEFAULT_LIGHTING_COLORS
 
 
 APP_STYLE = """
@@ -105,6 +108,16 @@ QCheckBox {
     border-radius: 6px;
     color: #F2F5F7;
     padding: 7px 9px;
+}
+
+QPushButton#ColorSwatch {
+    border: 1px solid #303842;
+    border-radius: 6px;
+    padding: 0;
+}
+
+QPushButton#ColorSwatch:disabled {
+    border-color: #252D35;
 }
 
 QComboBox:hover,

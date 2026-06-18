@@ -6,10 +6,11 @@ import sys
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Qt, Signal, Slot
-from PySide6.QtGui import QAction
+from PySide6.QtGui import QAction, QColor
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
+    QColorDialog,
     QFrame,
     QHBoxLayout,
     QLabel,
@@ -30,6 +31,7 @@ from pcpanel.events import ControlEvent, ControlKind
 from pcpanel.gui.resources import app_icon
 from pcpanel.gui.style import APP_STYLE, CHANNEL_COLORS
 from pcpanel.gui.widgets import ChannelStrip, StreamList
+from pcpanel.lighting import build_mini_dial_colors, colors_for_device
 from pcpanel.usb_reader import PyUsbReader
 
 
@@ -141,6 +143,8 @@ class MainWindow(QMainWindow):
         for index, row in enumerate(self.rows):
             row.target_changed.connect(self.on_target_changed)
             row.mute_clicked.connect(self.on_mute_clicked)
+            row.led_toggled.connect(self.on_led_toggled)
+            row.led_color_clicked.connect(self.on_led_color_clicked)
 
     def _build_tray(self) -> None:
         if not QSystemTrayIcon.isSystemTrayAvailable():
@@ -172,6 +176,7 @@ class MainWindow(QMainWindow):
         self.reader.start()
         self.device_state.setText("Device: connected")
         self.statusBar().showMessage("USB reader started")
+        QTimer.singleShot(250, self.apply_lighting)
 
     def refresh_streams(self) -> None:
         try:
@@ -199,6 +204,8 @@ class MainWindow(QMainWindow):
                 selected_index = row.target.count() - 1
             row.target.setCurrentIndex(selected_index)
             row.set_target_label(current)
+            lighting = self.config.lighting.dials[index]
+            row.set_led_state(lighting.enabled, lighting.color)
         self._refreshing_targets = False
 
     def _target_options(self) -> list[tuple[str, DialTarget]]:
@@ -295,6 +302,42 @@ class MainWindow(QMainWindow):
     def on_debug_toggled(self, enabled: bool) -> None:
         for row in self.rows:
             row.set_debug_visible(enabled)
+
+    @Slot(int, bool)
+    def on_led_toggled(self, index: int, enabled: bool) -> None:
+        self.config.lighting.dials[index].enabled = enabled
+        lighting = self.config.lighting.dials[index]
+        self.rows[index].set_led_state(lighting.enabled, lighting.color)
+        self.apply_lighting()
+
+    @Slot(int)
+    def on_led_color_clicked(self, index: int) -> None:
+        current = self.config.lighting.dials[index]
+        selected = QColorDialog.getColor(
+            QColor(current.color),
+            self,
+            f"Dial {index + 1} LED color",
+        )
+        if not selected.isValid():
+            return
+        current.color = selected.name().upper()
+        current.enabled = True
+        self.rows[index].set_led_state(current.enabled, current.color)
+        self.apply_lighting()
+
+    def apply_lighting(self) -> None:
+        if not self.config.lighting.enabled:
+            return
+        if self.reader is None:
+            return
+        try:
+            payload = build_mini_dial_colors(colors_for_device(self.config.lighting.dials))
+            self.reader.send_output_report(payload)
+        except Exception as exc:
+            self.statusBar().showMessage(f"LED update failed: {exc}")
+            LOGGER.debug("LED update failed", exc_info=True)
+            return
+        self.statusBar().showMessage("LED colors updated")
 
     @Slot()
     def show_from_tray(self) -> None:
