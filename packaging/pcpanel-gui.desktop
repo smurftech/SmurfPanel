@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=PCPanel
+Comment=USB audio control surface
+Exec=__EXEC_PATH__
+Icon=pcpanel
+Terminal=false
+Categories=AudioVideo;Audio;Settings;
+StartupNotify=true
