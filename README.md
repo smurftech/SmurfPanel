@@ -106,6 +106,23 @@ After installing, launch it from your app menu as `PCPanel` or from a terminal:
 pcpanel-gui
 ```
 
+Update an installed copy after making code changes:
+
+```bash
+.venv/bin/python -m PyInstaller pcpanel-gui.spec --clean --noconfirm
+./scripts/install_desktop.sh
+```
+
+Uninstall the user-level app:
+
+```bash
+./scripts/uninstall_desktop.sh
+```
+
+The uninstall script removes the bundled app, app-menu launcher, command
+symlink, and icon. It leaves your config file in place at
+`~/.config/pcpanel/config.json`.
+
 Notes:
 
 - The bundle is still platform-specific. Build it on the Linux distribution you
