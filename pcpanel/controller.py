@@ -8,7 +8,7 @@ from pathlib import Path
 from collections.abc import Callable
 
 from pcpanel.audio import AudioBackend, PactlAudioBackend
-from pcpanel.config import AppConfig, DialTarget, load_config
+from pcpanel.config import AppConfig, ButtonAction, DialTarget, load_config
 from pcpanel.events import ControlEvent, ControlKind
 from pcpanel.osd import LoggingOsd, Osd
 from pcpanel.usb_reader import PyUsbReader
@@ -64,7 +64,7 @@ class Controller:
             )
         )
 
-    def handle_event(self, event: ControlEvent) -> None:
+    def handle_event(self, event: ControlEvent) -> str | None:
         LOGGER.debug(
             "Received %s %s value=%s raw=%s",
             event.kind.value,
@@ -80,14 +80,14 @@ class Controller:
             target.type,
             target.label,
         )
-        if target.type == "none":
-            LOGGER.debug("%s %s is unmapped", event.kind.value, event.control_number)
-            return
-
         if event.kind == ControlKind.DIAL:
+            if target.type == "none":
+                LOGGER.debug("%s %s is unmapped", event.kind.value, event.control_number)
+                return None
             self._handle_dial(target, event)
         elif event.kind == ControlKind.BUTTON and event.is_pressed:
-            self._handle_button(target)
+            return self._handle_button(self.config.button_actions[event.control_index], target)
+        return None
 
     def _handle_dial(self, target: DialTarget, event: ControlEvent) -> None:
         previous_percent = self._last_dial_percent.get(event.control_index)
@@ -99,10 +99,11 @@ class Controller:
         if self.config.osd_enabled:
             self.osd.show_volume(target.label, event.percent)
 
-    def _handle_button(self, target: DialTarget) -> None:
-        self.audio.toggle_mute(target)
+    def _handle_button(self, action: ButtonAction, target: DialTarget) -> str | None:
+        message = self.audio.run_button_action(action, target)
         if self.config.osd_enabled:
-            self.osd.show_mute(target.label)
+            self.osd.show_mute(message or target.label)
+        return message
 
     @staticmethod
     def _default_reader_factory(on_event, stop_event):

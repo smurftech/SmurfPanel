@@ -151,7 +151,8 @@ Target types:
 - `system`: controls the default system output.
 - `app`: controls an application stream. Prefer `binary` or `app_name` over
   `stream_id`, because stream IDs change when apps restart.
-- `none`: ignores that dial/button.
+- `none`: ignores dial turns. Button presses still follow the saved button
+  action for that dial.
 
 Example app mapping:
 
@@ -165,10 +166,31 @@ Example app mapping:
 }
 ```
 
+Button press actions are stored separately from dial volume targets in
+`button_actions`. Each dial defaults to the original mute/unmute behavior:
+
+```json
+{
+  "type": "mute",
+  "output_name": null,
+  "output_label": null,
+  "toggle_output_name": null,
+  "toggle_output_label": null
+}
+```
+
+Button action types:
+
+- `mute`: toggles mute for that dial's volume target.
+- `set_output`: switches to `output_name`.
+- `toggle_output`: switches between `output_name` and `toggle_output_name`.
+
+The GUI lists available output devices and saves the selected device names in
+the config so the actions are active again on the next launch.
+
 ## Next Steps
 
 1. Replace the fallback `pactl` backend with a persistent `pulsectl` backend.
 2. Add a PySide6 transparent always-on-top OSD.
 3. Add saved/stale app targets to the GUI even when an app is not currently playing.
-4. Add USB reconnect handling and optional HID backend if the device exposes HID.
-5. Add a systemd user service for login startup.
+4. Add a systemd user service for login startup.
