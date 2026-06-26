@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QPixmap
 from PySide6.QtWidgets import (
     QCheckBox,
     QComboBox,
@@ -16,9 +19,11 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pcpanel.autostart import autostart_path
 from pcpanel.audio import OutputDevice
 from pcpanel.config import ButtonAction, DialTarget
 from pcpanel.events import ControlEvent, ControlKind
+from pcpanel.gui.resources import resource_path
 
 
 class ChannelStrip(QFrame):
@@ -327,3 +332,75 @@ class DialOptionsDialog(QDialog):
 
 def _target_key(target: DialTarget) -> tuple[str, str | None, str | None, str]:
     return (target.type, target.app_name, target.binary, target.label)
+
+
+class AboutDialog(QDialog):
+    def __init__(self, parent: QWidget, version: str, config_path: str) -> None:
+        super().__init__(parent)
+        self.setWindowTitle("About PCPanel")
+        self.setModal(True)
+        self.setFixedWidth(520)
+
+        layout = QVBoxLayout(self)
+        layout.setContentsMargins(22, 20, 22, 18)
+        layout.setSpacing(16)
+
+        header = QHBoxLayout()
+        header.setSpacing(14)
+        logo = QLabel()
+        logo.setPixmap(QPixmap(str(resource_path("assets/pcpanel.svg"))).scaled(
+            72,
+            72,
+            Qt.AspectRatioMode.KeepAspectRatio,
+            Qt.TransformationMode.SmoothTransformation,
+        ))
+        header.addWidget(logo)
+
+        title_stack = QVBoxLayout()
+        title = QLabel("PCPanel")
+        title.setStyleSheet("font-size: 24px; font-weight: 700;")
+        subtitle = QLabel("USB audio control surface for Linux")
+        subtitle.setObjectName("Subtitle")
+        creator = QLabel('Created by <a href="https://www.smurftech.com">Smurftech</a>')
+        creator.setOpenExternalLinks(True)
+        creator.setObjectName("Subtitle")
+        title_stack.addWidget(title)
+        title_stack.addWidget(subtitle)
+        title_stack.addWidget(creator)
+        header.addLayout(title_stack, 1)
+        layout.addLayout(header)
+
+        form = QFormLayout()
+        form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
+        form.addRow("Version", QLabel(version))
+        form.addRow("Website", _link_label("www.smurftech.com", "https://www.smurftech.com"))
+        form.addRow("Supported device", QLabel("PCPanel Mini (0483:a3c4)"))
+        form.addRow("Audio backend", QLabel("pactl / PulseAudio or PipeWire"))
+        form.addRow("Config", _path_label(_display_path(config_path)))
+        form.addRow("Startup", _path_label(_display_path(autostart_path())))
+        layout.addLayout(form)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok)
+        buttons.accepted.connect(self.accept)
+        layout.addWidget(buttons)
+
+
+def _link_label(text: str, url: str) -> QLabel:
+    label = QLabel(f'<a href="{url}">{text}</a>')
+    label.setOpenExternalLinks(True)
+    return label
+
+
+def _path_label(path: str) -> QLabel:
+    label = QLabel(path)
+    label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
+    label.setWordWrap(True)
+    return label
+
+
+def _display_path(path: str | Path) -> str:
+    path = Path(path).expanduser()
+    try:
+        return f"~/{path.relative_to(Path.home())}"
+    except ValueError:
+        return str(path)

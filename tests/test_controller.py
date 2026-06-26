@@ -30,11 +30,11 @@ class FakeOsd:
     def __init__(self) -> None:
         self.messages = []
 
-    def show_volume(self, label: str, percent: int) -> None:
-        self.messages.append(("volume", label, percent))
+    def show_volume(self, label: str, percent: int, control_index=None) -> None:
+        self.messages.append(("volume", label, percent, control_index))
 
-    def show_mute(self, label: str) -> None:
-        self.messages.append(("mute", label))
+    def show_mute(self, label: str, control_index=None) -> None:
+        self.messages.append(("mute", label, control_index))
 
 
 def test_controller_routes_dial_to_audio_and_osd() -> None:
@@ -46,7 +46,7 @@ def test_controller_routes_dial_to_audio_and_osd() -> None:
     controller.handle_event(new_event(ControlKind.DIAL, 0, 128, "010080"))
 
     assert audio.volumes == [("System", 50)]
-    assert osd.messages == [("volume", "System", 50)]
+    assert osd.messages == [("volume", "System", 50, 0)]
 
 
 def test_controller_ignores_duplicate_dial_percent() -> None:

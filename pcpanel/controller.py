@@ -97,7 +97,7 @@ class Controller:
         self._last_dial_percent[event.control_index] = event.percent
         self.audio.set_volume(target, event.percent)
         if self.config.osd_enabled:
-            self.osd.show_volume(target.label, event.percent)
+            self.osd.show_volume(target.label, event.percent, event.control_index)
 
     def _handle_button(self, action: ButtonAction, target: DialTarget) -> str | None:
         message = self.audio.run_button_action(action, target)

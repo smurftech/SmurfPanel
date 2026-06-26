@@ -24,13 +24,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
+from pcpanel import __version__
+from pcpanel.autostart import is_autostart_enabled, set_autostart_enabled
 from pcpanel.audio import AudioStream, CachedPactlAudioBackend, OutputDevice
 from pcpanel.config import AppConfig, ButtonAction, DialTarget, default_config_path, load_config, save_config
 from pcpanel.controller import Controller
 from pcpanel.events import ControlEvent, ControlKind
+from pcpanel.gui.osd import DialOsd
 from pcpanel.gui.resources import app_icon
 from pcpanel.gui.style import APP_STYLE, CHANNEL_COLORS
-from pcpanel.gui.widgets import ChannelStrip, DialOptionsDialog, StreamList
+from pcpanel.gui.widgets import AboutDialog, ChannelStrip, DialOptionsDialog, StreamList
 from pcpanel.lighting import build_mini_dial_colors, colors_for_device
 from pcpanel.usb_reader import PyUsbReader, ReaderStatus
 
@@ -51,7 +54,8 @@ class MainWindow(QMainWindow):
         self.config_path = config_path
         self.config = load_config(config_path)
         self.audio = CachedPactlAudioBackend()
-        self.controller = Controller(config=self.config, audio=self.audio)
+        self.osd = DialOsd()
+        self.controller = Controller(config=self.config, audio=self.audio, osd=self.osd)
         self.bridge = EventBridge()
         self.reader: PyUsbReader | None = None
         self.reader_status: ReaderStatus | None = None
@@ -127,11 +131,16 @@ class MainWindow(QMainWindow):
         self.osd_enabled = QCheckBox("OSD enabled")
         self.osd_enabled.setChecked(self.config.osd_enabled)
         self.debug_enabled = QCheckBox("Debug reports")
+        self.startup_enabled = QCheckBox("Open on startup")
+        self.startup_enabled.setChecked(is_autostart_enabled())
+        self.about_button = QPushButton("About")
         self.refresh_button = QPushButton("Refresh audio")
         self.save_button = QPushButton("Save config")
         controls.addWidget(self.osd_enabled)
         controls.addWidget(self.debug_enabled)
+        controls.addWidget(self.startup_enabled)
         controls.addStretch(1)
+        controls.addWidget(self.about_button)
         controls.addWidget(self.refresh_button)
         controls.addWidget(self.save_button)
         layout.addLayout(controls)
@@ -145,6 +154,8 @@ class MainWindow(QMainWindow):
         self.save_button.clicked.connect(self.save_current_config)
         self.osd_enabled.toggled.connect(self.on_osd_toggled)
         self.debug_enabled.toggled.connect(self.on_debug_toggled)
+        self.startup_enabled.toggled.connect(self.on_startup_toggled)
+        self.about_button.clicked.connect(self.show_about_dialog)
         for index, row in enumerate(self.rows):
             row.options_clicked.connect(self.on_options_clicked)
             row.mute_clicked.connect(self.on_mute_clicked)
@@ -350,10 +361,33 @@ class MainWindow(QMainWindow):
     def on_osd_toggled(self, enabled: bool) -> None:
         self.config.osd_enabled = enabled
         self.controller.config = self.config
+        if not enabled:
+            self.osd.hide()
 
     def on_debug_toggled(self, enabled: bool) -> None:
         for row in self.rows:
             row.set_debug_visible(enabled)
+
+    def on_startup_toggled(self, enabled: bool) -> None:
+        try:
+            set_autostart_enabled(enabled)
+        except Exception as exc:
+            self.startup_enabled.blockSignals(True)
+            self.startup_enabled.setChecked(not enabled)
+            self.startup_enabled.blockSignals(False)
+            self.statusBar().showMessage(f"Startup setting failed: {exc}")
+            LOGGER.exception("Startup setting failed")
+            return
+        state = "enabled" if enabled else "disabled"
+        self.statusBar().showMessage(f"Open on startup {state}")
+
+    def show_about_dialog(self) -> None:
+        dialog = AboutDialog(
+            parent=self,
+            version=app_version(),
+            config_path=str(self.config_path),
+        )
+        dialog.exec()
 
     @Slot(int, bool)
     def on_led_toggled(self, index: int, enabled: bool) -> None:
@@ -441,6 +475,7 @@ class MainWindow(QMainWindow):
     def closeEvent(self, event) -> None:
         if self._allow_close or self.tray_icon is None:
             self.controller.stop()
+            self.osd.hide()
             super().closeEvent(event)
             return
         event.ignore()
@@ -478,6 +513,10 @@ def button_action_label(action: ButtonAction) -> str:
         second = action.toggle_output_label or action.toggle_output_name or "unassigned"
         return f"toggle {first} / {second}"
     return "mute/unmute"
+
+
+def app_version() -> str:
+    return __version__
 
 
 def main() -> None:

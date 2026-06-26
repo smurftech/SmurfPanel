@@ -16,7 +16,7 @@ This is the first clean foundation:
 - shared parser for the documented PCPanel report format
 - controller loop separated from UI/debug code
 - `pactl` audio backend as an immediate fallback
-- OSD abstraction, currently logging-only
+- GUI OSD overlay with one independent status bar per dial
 - parser and audio-output parsing tests
 
 ## Run
@@ -32,7 +32,11 @@ python -m pcpanel.gui
 ```
 
 The GUI starts the same controller path as the CLI, shows live dial movement,
-shows mute state, and edits the config file.
+shows mute state, edits the config file, and can enable launch-on-login from
+the bottom control bar.
+
+The bottom control bar also includes an `About` popup with app version,
+creator, website, device, backend, config, and startup-path details.
 
 The default config is loaded from:
 
@@ -123,6 +127,12 @@ The uninstall script removes the bundled app, app-menu launcher, command
 symlink, and icon. It leaves your config file in place at
 `~/.config/pcpanel/config.json`.
 
+The GUI's `Open on startup` checkbox writes a user autostart launcher at:
+
+```text
+~/.config/autostart/pcpanel-gui.desktop
+```
+
 Notes:
 
 - The bundle is still platform-specific. Build it on the Linux distribution you
@@ -191,6 +201,5 @@ the config so the actions are active again on the next launch.
 ## Next Steps
 
 1. Replace the fallback `pactl` backend with a persistent `pulsectl` backend.
-2. Add a PySide6 transparent always-on-top OSD.
-3. Add saved/stale app targets to the GUI even when an app is not currently playing.
-4. Add a systemd user service for login startup.
+2. Add saved/stale app targets to the GUI even when an app is not currently playing.
+3. Add a systemd user service for login startup.
