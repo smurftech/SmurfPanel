@@ -7,7 +7,7 @@ import threading
 from pathlib import Path
 from collections.abc import Callable
 
-from pcpanel.audio import AudioBackend, PactlAudioBackend
+from pcpanel.audio import AudioBackend, CachedPactlAudioBackend
 from pcpanel.config import AppConfig, ButtonAction, DialTarget, load_config
 from pcpanel.events import ControlEvent, ControlKind
 from pcpanel.osd import LoggingOsd, Osd
@@ -26,7 +26,7 @@ class Controller:
         reader_factory: Callable[[Callable[[ControlEvent], None], threading.Event], threading.Thread] | None = None,
     ) -> None:
         self.config = config or load_config(config_path)
-        self.audio = audio or PactlAudioBackend()
+        self.audio = audio or CachedPactlAudioBackend()
         self.osd = osd or LoggingOsd()
         self.stop_event = threading.Event()
         self.events: queue.Queue[ControlEvent] = queue.Queue()
@@ -52,6 +52,9 @@ class Controller:
 
     def stop(self) -> None:
         self.stop_event.set()
+        close = getattr(self.audio, "close", None)
+        if callable(close):
+            close()
 
     def inject_dial(self, control_index: int, value: int) -> None:
         self.handle_event(
