@@ -19,7 +19,8 @@ LOGGER = logging.getLogger(__name__)
 VENDOR_ID = 0x0483
 PRODUCT_ID = 0xA3C4
 READ_TIMEOUT_MS = 100
-RECONNECT_DELAY_SECONDS = 1.5
+RECONNECT_DELAY_SECONDS = 1.0
+MAX_RECONNECT_DELAY_SECONDS = 8.0
 
 ReaderState = Literal["starting", "connected", "reconnecting", "stopped"]
 
@@ -51,21 +52,27 @@ class PyUsbReader(threading.Thread):
 
     def run(self) -> None:
         self._notify("starting", "Opening PCPanel USB device")
+        failure_count = 0
+
         while not self.stop_event.is_set():
             try:
                 endpoint = self._open_endpoint()
+                failure_count = 0
                 self._notify("connected", "PCPanel connected")
                 self._read_loop(endpoint)
             except Exception as exc:
                 if self.stop_event.is_set():
                     break
+                failure_count += 1
                 LOGGER.warning("USB reader will reconnect after failure: %s", exc)
                 self._notify("reconnecting", str(exc))
             finally:
                 self.close()
 
             if not self.stop_event.is_set():
-                self.stop_event.wait(RECONNECT_DELAY_SECONDS)
+                delay = reconnect_delay_for_attempt(failure_count)
+                LOGGER.debug("USB reconnect retry in %.1fs", delay)
+                self.stop_event.wait(delay)
 
         self._notify("stopped", "USB reader stopped")
 
@@ -79,7 +86,7 @@ class PyUsbReader(threading.Thread):
                         timeout=READ_TIMEOUT_MS,
                     )
             except usb.core.USBError as exc:
-                if getattr(exc, "errno", None) in (errno.ETIMEDOUT, None):
+                if _is_timeout_error(exc):
                     continue
                 LOGGER.warning("USB read failed: %s", exc)
                 raise RuntimeError(f"USB read failed: {exc}") from exc
@@ -181,6 +188,23 @@ class PyUsbReader(threading.Thread):
             endpoint.bEndpointAddress,
         )
         return endpoint
+
+
+def reconnect_delay_for_attempt(failure_count: int) -> float:
+    if failure_count <= 0:
+        return RECONNECT_DELAY_SECONDS
+    return min(
+        RECONNECT_DELAY_SECONDS * (2 ** min(failure_count - 1, 3)),
+        MAX_RECONNECT_DELAY_SECONDS,
+    )
+
+
+def _is_timeout_error(exc: usb.core.USBError) -> bool:
+    if getattr(exc, "errno", None) == errno.ETIMEDOUT:
+        return True
+    if getattr(exc, "backend_error_code", None) == -7:
+        return True
+    return "timed out" in str(exc).lower()
 
 
 def _detach_kernel_drivers(device) -> None:
