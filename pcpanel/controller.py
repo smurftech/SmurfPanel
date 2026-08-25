@@ -4,14 +4,14 @@ import logging
 import queue
 import signal
 import threading
-from pathlib import Path
 from collections.abc import Callable
+from pathlib import Path
 
 from pcpanel.audio import AudioBackend, PactlAudioBackend
 from pcpanel.config import AppConfig, DialTarget, load_config
+from pcpanel.device_service import DeviceService
 from pcpanel.events import ControlEvent, ControlKind
 from pcpanel.osd import LoggingOsd, Osd
-from pcpanel.usb_reader import PyUsbReader
 
 LOGGER = logging.getLogger(__name__)
 
@@ -106,4 +106,4 @@ class Controller:
 
     @staticmethod
     def _default_reader_factory(on_event, stop_event):
-        return PyUsbReader(on_event=on_event, stop_event=stop_event)
+        return DeviceService(on_event=on_event, stop_event=stop_event)
