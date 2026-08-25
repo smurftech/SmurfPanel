@@ -27,12 +27,12 @@ from PySide6.QtWidgets import (
 from pcpanel.audio import AudioStream, PactlAudioBackend
 from pcpanel.config import AppConfig, DialTarget, default_config_path, load_config, save_config
 from pcpanel.controller import Controller
+from pcpanel.device_service import DeviceService, DeviceState, DeviceStatus
 from pcpanel.events import ControlEvent, ControlKind
 from pcpanel.gui.resources import app_icon
 from pcpanel.gui.style import APP_STYLE, CHANNEL_COLORS
 from pcpanel.gui.widgets import ChannelStrip, StreamList
 from pcpanel.lighting import build_mini_dial_colors, colors_for_device
-from pcpanel.usb_reader import PyUsbReader
 
 
 LOGGER = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ WINDOW_HEIGHT = 720
 
 class EventBridge(QObject):
     event_received = Signal(object)
-    reader_stopped = Signal()
+    device_state_received = Signal(object)
 
 
 class MainWindow(QMainWindow):
@@ -53,7 +53,7 @@ class MainWindow(QMainWindow):
         self.audio = PactlAudioBackend()
         self.controller = Controller(config=self.config, audio=self.audio)
         self.bridge = EventBridge()
-        self.reader: PyUsbReader | None = None
+        self.device_service: DeviceService | None = None
         self.streams: list[AudioStream] = []
         self.rows = [ChannelStrip(index, CHANNEL_COLORS[index]) for index in range(4)]
         self._refreshing_targets = False
@@ -72,7 +72,7 @@ class MainWindow(QMainWindow):
         self.refresh_streams()
         self.refresh_initial_volumes()
         self.refresh_status()
-        self.start_reader()
+        self.start_device_service()
 
         self.status_timer = QTimer(self)
         self.status_timer.timeout.connect(self.refresh_status)
@@ -137,6 +137,7 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self) -> None:
         self.bridge.event_received.connect(self.on_event_received)
+        self.bridge.device_state_received.connect(self.on_device_status)
         self.refresh_button.clicked.connect(self.refresh_streams)
         self.save_button.clicked.connect(self.save_current_config)
         self.osd_enabled.toggled.connect(self.on_osd_toggled)
@@ -172,12 +173,38 @@ class MainWindow(QMainWindow):
         self.tray_icon.activated.connect(self.on_tray_activated)
         self.tray_icon.show()
 
-    def start_reader(self) -> None:
-        self.reader = PyUsbReader(on_event=self.bridge.event_received.emit, stop_event=self.controller.stop_event)
-        self.reader.start()
-        self.device_state.setText("Device: connected")
-        self.statusBar().showMessage("USB reader started")
-        QTimer.singleShot(250, self.apply_lighting)
+    def start_device_service(self) -> None:
+        self.device_service = DeviceService(
+            on_event=self.bridge.event_received.emit,
+            stop_event=self.controller.stop_event,
+            on_state=self.bridge.device_state_received.emit,
+        )
+        self.device_service.start()
+        self.statusBar().showMessage("USB device service started")
+
+    @Slot(object)
+    def on_device_status(self, status: DeviceStatus) -> None:
+        labels = {
+            DeviceState.CONNECTING: "Device: connecting",
+            DeviceState.CONNECTED: "Device: connected",
+            DeviceState.DISCONNECTED: "Device: disconnected",
+            DeviceState.RECONNECTING: "Device: reconnecting",
+            DeviceState.STOPPED: "Device: stopped",
+        }
+        self.device_state.setText(labels[status.state])
+
+        if status.state == DeviceState.CONNECTED:
+            self.statusBar().showMessage("PCPanel connected")
+            QTimer.singleShot(100, self.apply_lighting)
+            return
+
+        if status.state == DeviceState.DISCONNECTED:
+            detail = f": {status.message}" if status.message else ""
+            self.statusBar().showMessage(f"PCPanel disconnected{detail}")
+        elif status.state == DeviceState.RECONNECTING:
+            self.statusBar().showMessage("Reconnecting to PCPanel…")
+        elif status.state == DeviceState.CONNECTING:
+            self.statusBar().showMessage("Connecting to PCPanel…")
 
     def refresh_streams(self) -> None:
         try:
@@ -343,11 +370,11 @@ class MainWindow(QMainWindow):
     def apply_lighting(self) -> None:
         if not self.config.lighting.enabled:
             return
-        if self.reader is None:
+        if self.device_service is None or not self.device_service.connected:
             return
         try:
             payload = build_mini_dial_colors(colors_for_device(self.config.lighting.dials))
-            self.reader.send_output_report(payload)
+            self.device_service.send_output_report(payload)
         except Exception as exc:
             self.statusBar().showMessage(f"LED update failed: {exc}")
             LOGGER.debug("LED update failed", exc_info=True)
