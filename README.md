@@ -11,13 +11,17 @@ USB reader -> report parser -> controller -> audio backend -> OSD
 
 ## Current Status
 
-This is the first clean foundation:
+The runtime now includes:
 
 - shared parser for the documented PCPanel report format
 - controller loop separated from UI/debug code
-- `pactl` audio backend as an immediate fallback
+- persistent `pulsectl` backend for normal PulseAudio / PipeWire-Pulse control
+- `pactl` subprocess backend retained as a diagnostic/fallback implementation
+- application targets resolved by stable binary/name metadata and applied to all matching active streams
+- automatic USB reconnect with bounded backoff after device loss or failed opens
+- GUI device status driven by the real USB connection lifecycle
 - GUI OSD overlay with one independent status bar per dial
-- parser and audio-output parsing tests
+- parser, audio, USB reconnect, config and controller tests
 
 ## Run
 
@@ -137,7 +141,9 @@ Notes:
 
 - The bundle is still platform-specific. Build it on the Linux distribution you
   plan to run it on.
-- `pactl` must be available on the target machine.
+- The normal runtime talks to the PulseAudio-compatible server through
+  `pulsectl`; this works with PipeWire-Pulse as used by current Linux desktops.
+- `pactl` remains useful for diagnostics and the fallback backend.
 - The USB udev rule still needs to be installed so the app can access the device
   without root.
 - Only one PCPanel process can own the USB interface at a time.
@@ -159,8 +165,10 @@ Each dial target has this shape:
 Target types:
 
 - `system`: controls the default system output.
-- `app`: controls an application stream. Prefer `binary` or `app_name` over
-  `stream_id`, because stream IDs change when apps restart.
+- `app`: controls an application. Prefer `binary` or `app_name` over
+  `stream_id`, because stream IDs change when apps restart. When an application
+  has multiple active audio streams, all matching streams are controlled
+  together.
 - `none`: ignores dial turns. Button presses still follow the saved button
   action for that dial.
 
@@ -200,6 +208,6 @@ the config so the actions are active again on the next launch.
 
 ## Next Steps
 
-1. Replace the fallback `pactl` backend with a persistent `pulsectl` backend.
-2. Add saved/stale app targets to the GUI even when an app is not currently playing.
-3. Add a systemd user service for login startup.
+1. Add saved/stale app targets to the GUI even when an app is not currently playing.
+2. Add a systemd user service for login startup.
+3. Align the visual layer with the shared Smurftech brand/devkit while retaining the current control-surface layout.
