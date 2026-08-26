@@ -6,6 +6,7 @@ from pcpanel.gui.app import (
     button_action_label,
     reader_status_text,
     target_matches_stream,
+    toggled_app_mute_streams,
 )
 from pcpanel.gui.widgets import _display_path
 from pcpanel.usb_reader import ReaderStatus
@@ -79,3 +80,18 @@ def test_target_matching_prefers_app_id_but_falls_back_to_binary() -> None:
         identified,
         AudioStream(43, "Browser", binary="firefox", app_id="com.google.Chrome"),
     ) is False
+
+
+def test_cached_app_mute_updates_all_matching_streams_immediately() -> None:
+    target = DialTarget(type="app", label="Firefox", app_id="org.mozilla.firefox")
+    streams = [
+        AudioStream(41, "Firefox", muted=False, app_id="org.mozilla.firefox"),
+        AudioStream(42, "Firefox", muted=False, app_id="org.mozilla.firefox"),
+        AudioStream(99, "Spotify", muted=False, app_id="com.spotify.Client"),
+    ]
+
+    muted = toggled_app_mute_streams(streams, target)
+    unmuted = toggled_app_mute_streams(muted, target)
+
+    assert [stream.muted for stream in muted] == [True, True, False]
+    assert [stream.muted for stream in unmuted] == [False, False, False]

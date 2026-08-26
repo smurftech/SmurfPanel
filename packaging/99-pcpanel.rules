@@ -1,0 +1,2 @@
+# PCPanel Mini (0483:a3c4): allow the active local desktop user to access it.
+SUBSYSTEM=="usb", ATTR{idVendor}=="0483", ATTR{idProduct}=="a3c4", TAG+="uaccess"

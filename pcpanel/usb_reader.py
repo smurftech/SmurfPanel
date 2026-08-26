@@ -137,6 +137,8 @@ class PyUsbReader(threading.Thread):
         try:
             device.set_configuration()
         except usb.core.USBError as exc:
+            if getattr(exc, "errno", None) in (errno.EACCES, errno.EPERM):
+                raise RuntimeError(usb_permission_error_message()) from exc
             if getattr(exc, "errno", None) != errno.EBUSY:
                 raise
             LOGGER.info("USB device is busy during configuration; trying kernel-driver detach")
@@ -174,6 +176,8 @@ class PyUsbReader(threading.Thread):
         try:
             usb.util.claim_interface(device, interface_number)
         except usb.core.USBError as exc:
+            if getattr(exc, "errno", None) in (errno.EACCES, errno.EPERM):
+                raise RuntimeError(usb_permission_error_message()) from exc
             if getattr(exc, "errno", None) == errno.EBUSY:
                 raise RuntimeError(
                     "USB interface is busy. Another process or kernel driver is using the "
@@ -196,6 +200,14 @@ def reconnect_delay_for_attempt(failure_count: int) -> float:
     return min(
         RECONNECT_DELAY_SECONDS * (2 ** min(failure_count - 1, 3)),
         MAX_RECONNECT_DELAY_SECONDS,
+    )
+
+
+def usb_permission_error_message() -> str:
+    return (
+        "Permission denied opening PCPanel USB device 0483:a3c4. "
+        "Install the udev rule with scripts/install_udev_rules.sh, then unplug "
+        "and reconnect the device."
     )
 
 

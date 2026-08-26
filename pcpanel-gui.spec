@@ -9,7 +9,7 @@ hiddenimports = [
     "PySide6.QtCore",
     "PySide6.QtGui",
     "PySide6.QtWidgets",
-] + collect_submodules("usb")
+] + collect_submodules("usb") + collect_submodules("pulsectl")
 
 a = Analysis(
     ["scripts/pcpanel_gui.py"],
