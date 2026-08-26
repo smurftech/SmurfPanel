@@ -1,9 +1,10 @@
 from pcpanel.audio import AudioStream
-from pcpanel.config import ButtonAction, DialTarget
+from pcpanel.config import AppConfig, ButtonAction, DialTarget, config_to_json
 from pcpanel.gui.app import (
     app_version,
     build_target_options,
     button_action_label,
+    config_is_dirty,
     reader_status_text,
     target_matches_stream,
     toggled_app_mute_streams,
@@ -95,3 +96,14 @@ def test_cached_app_mute_updates_all_matching_streams_immediately() -> None:
 
     assert [stream.muted for stream in muted] == [True, True, False]
     assert [stream.muted for stream in unmuted] == [False, False, False]
+
+
+def test_dirty_state_compares_current_config_to_saved_snapshot() -> None:
+    config = AppConfig()
+    saved = config_to_json(config)
+
+    assert config_is_dirty(config, saved) is False
+
+    config.osd_enabled = False
+
+    assert config_is_dirty(config, saved) is True
