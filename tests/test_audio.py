@@ -25,6 +25,7 @@ def test_parse_sink_inputs_extracts_stable_metadata() -> None:
 Sink Input #42
     Properties:
         application.name = "Firefox"
+        application.id = "org.mozilla.firefox"
         application.process.binary = "firefox"
         media.name = "AudioStream"
     Volume: front-left: 32768 / 50% / -18.06 dB, front-right: 32768 / 50% / -18.06 dB
@@ -36,6 +37,7 @@ Sink Input #42
     assert streams[0].id == 42
     assert streams[0].name == "Firefox"
     assert streams[0].binary == "firefox"
+    assert streams[0].app_id == "org.mozilla.firefox"
     assert streams[0].volume == 50
     assert streams[0].muted is False
 
@@ -127,7 +129,14 @@ class FakeVolume:
 
 
 class FakeSinkInput:
-    def __init__(self, index: int, binary: str, name: str = "Firefox", mute: bool = False) -> None:
+    def __init__(
+        self,
+        index: int,
+        binary: str,
+        name: str = "Firefox",
+        mute: bool = False,
+        app_id: str | None = None,
+    ) -> None:
         self.index = index
         self.name = name
         self.mute = mute
@@ -135,6 +144,7 @@ class FakeSinkInput:
         self.proplist = {
             "application.name": name,
             "application.process.binary": binary,
+            "application.id": app_id,
         }
 
 
@@ -171,3 +181,24 @@ def test_persistent_backend_controls_all_streams_for_same_app() -> None:
 
     assert backend._pulse.volume_calls == [(41, 0.65), (42, 0.65)]
     assert backend._pulse.mute_calls == [(41, True), (42, True)]
+
+
+def test_persistent_backend_prefers_stable_app_id() -> None:
+    backend = CachedPactlAudioBackend()
+    backend._pulse = FakePulse(
+        [
+            FakeSinkInput(41, "shared-host", name="Browser", app_id="org.mozilla.firefox"),
+            FakeSinkInput(42, "shared-host", name="Browser", app_id="com.google.Chrome"),
+        ]
+    )
+    target = DialTarget(
+        type="app",
+        label="Firefox",
+        app_name="Browser",
+        app_id="org.mozilla.firefox",
+        binary="shared-host",
+    )
+
+    backend.set_volume(target, 25)
+
+    assert backend._pulse.volume_calls == [(41, 0.25)]

@@ -18,6 +18,7 @@ class AudioStream:
     volume: int | None = None
     muted: bool | None = None
     binary: str | None = None
+    app_id: str | None = None
 
 
 @dataclass(frozen=True)
@@ -134,10 +135,12 @@ class PactlAudioBackend:
     def _resolve_stream_ids(self, target: DialTarget) -> list[int]:
         if target.type != "app":
             return []
-        if target.stream_id is not None:
-            return [target.stream_id]
 
         streams = self.list_streams()
+        if target.app_id:
+            matches = [stream.id for stream in streams if stream.app_id == target.app_id]
+            if matches:
+                return matches
         if target.binary:
             matches = [stream.id for stream in streams if stream.binary == target.binary]
             if matches:
@@ -229,7 +232,7 @@ def parse_sink_inputs(stdout: str) -> list[AudioStream]:
         if match := re.match(r"\s*Sink Input #(\d+)", line):
             if current is not None:
                 streams.append(_stream_from_dict(current))
-            current = {"id": int(match.group(1)), "name": None, "volume": None, "muted": None, "binary": None}
+            current = {"id": int(match.group(1)), "name": None, "volume": None, "muted": None, "binary": None, "app_id": None}
             continue
         if current is None:
             continue
@@ -238,6 +241,9 @@ def parse_sink_inputs(stdout: str) -> list[AudioStream]:
             continue
         if match := re.match(r'\s*application.process.binary\s*=\s*"(.+)"', line):
             current["binary"] = match.group(1)
+            continue
+        if match := re.match(r'\s*application.id\s*=\s*"(.+)"', line):
+            current["app_id"] = match.group(1)
             continue
         if match := re.match(r'\s*media.name\s*=\s*"(.+)"', line):
             current["name"] = current["name"] or match.group(1)
@@ -274,10 +280,12 @@ def _stream_from_dict(data: dict[str, object]) -> AudioStream:
     volume = data.get("volume")
     muted = data.get("muted")
     binary = data.get("binary")
+    app_id = data.get("app_id")
     return AudioStream(
         id=stream_id,
         name=name,
         volume=volume if isinstance(volume, int) else None,
         muted=muted if isinstance(muted, bool) else None,
         binary=binary if isinstance(binary, str) else None,
+        app_id=app_id if isinstance(app_id, str) else None,
     )

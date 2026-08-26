@@ -2,8 +2,10 @@ from __future__ import annotations
 
 import logging
 import threading
+from typing import TYPE_CHECKING
 
-import pulsectl
+if TYPE_CHECKING:
+    import pulsectl
 
 from pcpanel.config import ButtonAction, DialTarget
 
@@ -146,8 +148,10 @@ class PulseAudioBackend:
     def _resolve_stream_id(self, target: DialTarget) -> int | None:
         if target.type != "app":
             return None
-        if target.stream_id is not None:
-            return target.stream_id
+        if target.app_id:
+            for stream in self._cached_streams:
+                if stream.app_id == target.app_id:
+                    return stream.id
         for stream in self._cached_streams:
             if target.binary and stream.binary == target.binary:
                 return stream.id
@@ -159,8 +163,15 @@ class PulseAudioBackend:
         if target.type != "app":
             return []
         streams = self._client().sink_input_list()
-        if target.stream_id is not None:
-            return [stream for stream in streams if stream.index == target.stream_id]
+
+        if target.app_id:
+            matches = [
+                stream
+                for stream in streams
+                if stream.proplist.get("application.id") == target.app_id
+            ]
+            if matches:
+                return matches
 
         if target.binary:
             matches = [
@@ -200,6 +211,8 @@ class PulseAudioBackend:
 
     def _client(self) -> pulsectl.Pulse:
         if self._pulse is None:
+            import pulsectl
+
             self._pulse = pulsectl.Pulse(self.client_name)
         return self._pulse
 
@@ -214,6 +227,7 @@ class PulseAudioBackend:
             volume=round(float(info.volume.value_flat) * 100),
             muted=bool(info.mute),
             binary=info.proplist.get("application.process.binary"),
+            app_id=info.proplist.get("application.id"),
         )
 
     @staticmethod

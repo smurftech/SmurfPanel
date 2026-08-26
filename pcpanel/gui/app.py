@@ -64,6 +64,7 @@ class MainWindow(QMainWindow):
         self.default_output_name: str | None = None
         self.rows = [ChannelStrip(index, CHANNEL_COLORS[index]) for index in range(4)]
         self._refreshing_targets = False
+        self._config_dirty = False
         self._allow_close = False
         self.tray_icon: QSystemTrayIcon | None = None
 
@@ -136,10 +137,13 @@ class MainWindow(QMainWindow):
         self.about_button = QPushButton("About")
         self.refresh_button = QPushButton("Refresh audio")
         self.save_button = QPushButton("Save config")
+        self.config_state = QLabel("Config saved")
+        self.config_state.setObjectName("Meta")
         controls.addWidget(self.osd_enabled)
         controls.addWidget(self.debug_enabled)
         controls.addWidget(self.startup_enabled)
         controls.addStretch(1)
+        controls.addWidget(self.config_state)
         controls.addWidget(self.about_button)
         controls.addWidget(self.refresh_button)
         controls.addWidget(self.save_button)
@@ -242,30 +246,7 @@ class MainWindow(QMainWindow):
         self._refreshing_targets = False
 
     def _target_options(self) -> list[tuple[str, DialTarget]]:
-        options: list[tuple[str, DialTarget]] = [
-            ("None", DialTarget(type="none", label="None")),
-            ("System", DialTarget(type="system", label="System")),
-        ]
-        name_counts: dict[str, int] = {}
-        for stream in self.streams:
-            name_counts[stream.name] = name_counts.get(stream.name, 0) + 1
-        for stream in self.streams:
-            label = stream.name
-            if name_counts[stream.name] > 1 and stream.binary:
-                label = f"{stream.name} ({stream.binary})"
-            options.append(
-                (
-                    label,
-                    DialTarget(
-                        type="app",
-                        label=stream.name,
-                        app_name=stream.name,
-                        binary=stream.binary,
-                        stream_id=None,
-                    ),
-                )
-            )
-        return options
+        return build_target_options(self.config.dials, self.streams)
 
     @Slot(object)
     def on_event_received(self, event: ControlEvent) -> None:
@@ -292,13 +273,12 @@ class MainWindow(QMainWindow):
             system_mute = self.audio.get_system_mute()
         except Exception:
             system_mute = None
-        stream_by_key = {stream_key(stream): stream for stream in self.streams}
         for index, row in enumerate(self.rows):
             target = self.config.dials[index]
             if target.type == "system":
                 row.set_mute_state(system_mute)
             elif target.type == "app":
-                stream = stream_by_key.get((target.app_name, target.binary))
+                stream = next((item for item in self.streams if target_matches_stream(target, item)), None)
                 row.set_mute_state(stream.muted if stream else None)
             else:
                 row.set_mute_state(None)
@@ -309,13 +289,12 @@ class MainWindow(QMainWindow):
             system_volume = self.audio.get_system_volume()
         except Exception:
             system_volume = None
-        stream_by_key = {stream_key(stream): stream for stream in self.streams}
         for index, row in enumerate(self.rows):
             target = self.config.dials[index]
             if target.type == "system":
                 row.set_volume_state(system_volume)
             elif target.type == "app":
-                stream = stream_by_key.get((target.app_name, target.binary))
+                stream = next((item for item in self.streams if target_matches_stream(target, item)), None)
                 row.set_volume_state(stream.volume if stream else None)
 
     @Slot(int)
@@ -337,6 +316,7 @@ class MainWindow(QMainWindow):
         self.config.dials[index] = target
         self.config.button_actions[index] = action
         self.controller.config = self.config
+        self.mark_config_dirty()
         self.rows[index].set_target_label(target)
         self.statusBar().showMessage(
             f"Dial {index + 1}: {target.label}, press {button_action_label(action)}"
@@ -361,6 +341,7 @@ class MainWindow(QMainWindow):
     def on_osd_toggled(self, enabled: bool) -> None:
         self.config.osd_enabled = enabled
         self.controller.config = self.config
+        self.mark_config_dirty()
         if not enabled:
             self.osd.hide()
 
@@ -392,6 +373,7 @@ class MainWindow(QMainWindow):
     @Slot(int, bool)
     def on_led_toggled(self, index: int, enabled: bool) -> None:
         self.config.lighting.dials[index].enabled = enabled
+        self.mark_config_dirty()
         lighting = self.config.lighting.dials[index]
         self.rows[index].set_led_state(lighting.enabled, lighting.color)
         self.apply_lighting()
@@ -408,6 +390,7 @@ class MainWindow(QMainWindow):
             return
         current.color = selected.name().upper()
         current.enabled = True
+        self.mark_config_dirty()
         self.rows[index].set_led_state(current.enabled, current.color)
         self.apply_lighting()
 
@@ -470,7 +453,17 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.critical(self, "Save failed", str(exc))
             return
+        self.set_config_dirty(False)
         self.statusBar().showMessage(f"Saved config to {self.config_path}")
+
+    def mark_config_dirty(self) -> None:
+        self.set_config_dirty(True)
+
+    def set_config_dirty(self, dirty: bool) -> None:
+        self._config_dirty = dirty
+        self.config_state.setText("Unsaved changes" if dirty else "Config saved")
+        self.save_button.setText("Save config *" if dirty else "Save config")
+        self.setWindowTitle("PCPanel *" if dirty else "PCPanel")
 
     def closeEvent(self, event) -> None:
         if self._allow_close or self.tray_icon is None:
@@ -487,12 +480,55 @@ class MainWindow(QMainWindow):
         super().changeEvent(event)
 
 
-def target_key(target: DialTarget) -> tuple[str, str | None, str | None, str]:
-    return (target.type, target.app_name, target.binary, target.label)
+def target_key(target: DialTarget) -> tuple[str, str | None, str | None, str | None]:
+    return (target.type, target.app_id, target.binary, target.app_name)
 
 
-def stream_key(stream: AudioStream) -> tuple[str, str | None]:
-    return (stream.name, stream.binary)
+def target_matches_stream(target: DialTarget, stream: AudioStream) -> bool:
+    if target.type != "app":
+        return False
+    if target.app_id and stream.app_id:
+        return stream.app_id == target.app_id
+    if target.binary and stream.binary == target.binary:
+        return True
+    return bool(target.app_name and stream.name == target.app_name)
+
+
+def build_target_options(
+    saved_targets: list[DialTarget], streams: list[AudioStream]
+) -> list[tuple[str, DialTarget]]:
+    options = [
+        ("None", DialTarget(type="none", label="None")),
+        ("System", DialTarget(type="system", label="System")),
+    ]
+    seen: set[tuple[str, str | None, str | None, str | None]] = {
+        target_key(target) for _, target in options
+    }
+    for stream in streams:
+        target = DialTarget(
+            type="app",
+            label=stream.name,
+            app_name=stream.name,
+            app_id=stream.app_id,
+            binary=stream.binary,
+        )
+        key = target_key(target)
+        if key in seen:
+            continue
+        seen.add(key)
+        detail = stream.binary or stream.app_id
+        display = f"{stream.name} ({detail})" if detail else stream.name
+        options.append((display, target))
+
+    for target in saved_targets:
+        key = target_key(target)
+        if target.type != "app" or key in seen:
+            continue
+        seen.add(key)
+        active = any(target_matches_stream(target, stream) for stream in streams)
+        suffix = "active" if active else "inactive"
+        options.append((f"{target.label} (saved, {suffix})", target))
+    return options
 
 
 def reader_status_text(status: ReaderStatus) -> tuple[str, str]:
