@@ -2,6 +2,7 @@ from pathlib import Path
 
 from pcpanel.autostart import APP_NAME
 from pcpanel.config import DEFAULT_LIGHTING_COLORS
+from pcpanel.gui.resources import BRAND_FONT_FILES, resource_path
 from pcpanel.gui.style import APP_STYLE
 
 
@@ -28,10 +29,12 @@ def test_smurftech_base_palette_is_applied() -> None:
     ]
 
 
-def test_brand_typography_uses_approved_fallback_stacks() -> None:
+def test_brand_typography_is_bundled_with_approved_fallback_stacks() -> None:
     assert "font-family: Inter" in APP_STYLE
     assert "font-family: Orbitron, Rajdhani, Inter" in APP_STYLE
     assert "font-family: Rajdhani, Inter" in APP_STYLE
+    assert len(BRAND_FONT_FILES) == 4
+    assert all(resource_path(font_file).is_file() for font_file in BRAND_FONT_FILES)
 
 
 def test_user_facing_desktop_name_is_smurfpanel() -> None:
