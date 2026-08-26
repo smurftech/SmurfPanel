@@ -41,10 +41,10 @@
   "lighting": {
     "enabled": true,
     "dials": [
-      {"enabled": true, "color": "#4DA3FF"},
-      {"enabled": true, "color": "#35D0BA"},
-      {"enabled": true, "color": "#A78BFA"},
-      {"enabled": true, "color": "#F7C948"}
+      {"enabled": true, "color": "#0D6EFD"},
+      {"enabled": true, "color": "#4FC3FF"},
+      {"enabled": true, "color": "#E6F0FF"},
+      {"enabled": true, "color": "#F2F4F7"}
     ]
   }
 }

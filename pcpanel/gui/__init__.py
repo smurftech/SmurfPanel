@@ -1,1 +1,1 @@
-"""Qt GUI for PCPanel."""
+"""Qt GUI for SmurfPanel."""

@@ -38,9 +38,9 @@ def run_diagnostics() -> list[DiagnosticCheck]:
                 name="usb",
                 ok=device is not None,
                 message=(
-                    "PCPanel USB device detected"
+                    "PCPanel Mini USB device detected"
                     if device is not None
-                    else "PCPanel USB device not detected; connect it and run diagnostics again"
+                    else "PCPanel Mini USB device not detected; connect it and run diagnostics again"
                 ),
             )
         )

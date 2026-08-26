@@ -1,6 +1,7 @@
 [Desktop Entry]
 Type=Application
-Name=PCPanel
+Name=SmurfPanel
+GenericName=USB Audio Control Surface
 Comment=USB audio control surface
 Exec=__EXEC_PATH__
 TryExec=__EXEC_PATH__

@@ -51,11 +51,12 @@ class ChannelStrip(QFrame):
         layout.addWidget(self.accent_line)
 
         self.title = QLabel(f"Dial {index + 1}")
-        self.title.setStyleSheet("font-size: 16px; font-weight: 700;")
+        self.title.setObjectName("ChannelTitle")
+        self.title.setStyleSheet("font-size: 16px;")
         layout.addWidget(self.title)
 
         self.target_label = QLabel("None")
-        self.target_label.setObjectName("Subtitle")
+        self.target_label.setObjectName("TargetLabel")
         self.target_label.setWordWrap(True)
         layout.addWidget(self.target_label)
 
@@ -116,7 +117,7 @@ class ChannelStrip(QFrame):
         self.led_enabled.setChecked(enabled)
         self.led_enabled.blockSignals(False)
         self.led_color.setEnabled(enabled)
-        border = "#303842" if enabled else "#252D35"
+        border = "#4FC3FF" if enabled else "#1E2A3A"
         self.led_color.setStyleSheet(
             "QPushButton#ColorSwatch { "
             f"background: {color}; border: 1px solid {border}; border-radius: 6px; padding: 0; "
@@ -190,7 +191,8 @@ class StreamList(QFrame):
         layout.setContentsMargins(14, 14, 14, 14)
         layout.setSpacing(10)
         self.title = QLabel("Active Apps")
-        self.title.setStyleSheet("font-size: 16px; font-weight: 700;")
+        self.title.setObjectName("SectionTitle")
+        self.title.setStyleSheet("font-size: 16px;")
         self.empty = QLabel("No active streams")
         self.empty.setObjectName("Meta")
         layout.addWidget(self.title)
@@ -356,7 +358,7 @@ def _target_key(target: DialTarget) -> tuple[str, str | None, str | None, str | 
 class AboutDialog(QDialog):
     def __init__(self, parent: QWidget, version: str, config_path: str) -> None:
         super().__init__(parent)
-        self.setWindowTitle("About PCPanel")
+        self.setWindowTitle("About SmurfPanel")
         self.setModal(True)
         self.setFixedWidth(520)
 
@@ -376,9 +378,9 @@ class AboutDialog(QDialog):
         header.addWidget(logo)
 
         title_stack = QVBoxLayout()
-        title = QLabel("PCPanel")
-        title.setStyleSheet("font-size: 24px; font-weight: 700;")
-        subtitle = QLabel("USB audio control surface for Linux")
+        title = QLabel("SmurfPanel")
+        title.setObjectName("Title")
+        subtitle = QLabel("// DEVICE CONTROL")
         subtitle.setObjectName("Subtitle")
         creator = QLabel('Created by <a href="https://www.smurftech.com">Smurftech</a>')
         creator.setOpenExternalLinks(True)
@@ -393,7 +395,7 @@ class AboutDialog(QDialog):
         form.setFieldGrowthPolicy(QFormLayout.FieldGrowthPolicy.ExpandingFieldsGrow)
         form.addRow("Version", QLabel(version))
         form.addRow("Website", _link_label("www.smurftech.com", "https://www.smurftech.com"))
-        form.addRow("Supported device", QLabel("PCPanel Mini (0483:a3c4)"))
+        form.addRow("Supported hardware", QLabel("PCPanel Mini (0483:a3c4)"))
         form.addRow("Audio backend", QLabel("pactl / PulseAudio or PipeWire"))
         form.addRow("Config", _path_label(_display_path(config_path)))
         form.addRow("Startup", _path_label(_display_path(autostart_path())))
