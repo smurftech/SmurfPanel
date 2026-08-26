@@ -330,8 +330,8 @@ class DialOptionsDialog(QDialog):
         combo.setCurrentIndex(0)
 
 
-def _target_key(target: DialTarget) -> tuple[str, str | None, str | None, str]:
-    return (target.type, target.app_name, target.binary, target.label)
+def _target_key(target: DialTarget) -> tuple[str, str | None, str | None, str | None]:
+    return (target.type, target.app_id, target.binary, target.app_name)
 
 
 class AboutDialog(QDialog):

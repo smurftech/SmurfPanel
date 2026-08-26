@@ -1,34 +1,50 @@
 {
+  "version": 2,
   "dials": [
     {
       "type": "system",
       "label": "System",
       "app_name": null,
-      "binary": null,
-      "stream_id": null
+      "app_id": null,
+      "binary": null
     },
     {
       "type": "none",
       "label": "None",
       "app_name": null,
-      "binary": null,
-      "stream_id": null
+      "app_id": null,
+      "binary": null
     },
     {
       "type": "none",
       "label": "None",
       "app_name": null,
-      "binary": null,
-      "stream_id": null
+      "app_id": null,
+      "binary": null
     },
     {
       "type": "none",
       "label": "None",
       "app_name": null,
-      "binary": null,
-      "stream_id": null
+      "app_id": null,
+      "binary": null
     }
   ],
+  "button_actions": [
+    {"type": "mute", "output_name": null, "output_label": null, "toggle_output_name": null, "toggle_output_label": null},
+    {"type": "mute", "output_name": null, "output_label": null, "toggle_output_name": null, "toggle_output_label": null},
+    {"type": "mute", "output_name": null, "output_label": null, "toggle_output_name": null, "toggle_output_label": null},
+    {"type": "mute", "output_name": null, "output_label": null, "toggle_output_name": null, "toggle_output_label": null}
+  ],
   "osd_enabled": true,
-  "volume_step_hz": 60
+  "volume_step_hz": 60,
+  "lighting": {
+    "enabled": true,
+    "dials": [
+      {"enabled": true, "color": "#4DA3FF"},
+      {"enabled": true, "color": "#35D0BA"},
+      {"enabled": true, "color": "#A78BFA"},
+      {"enabled": true, "color": "#F7C948"}
+    ]
+  }
 }

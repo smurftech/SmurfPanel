@@ -17,7 +17,13 @@ def test_save_and_load_config(tmp_path) -> None:
     config = AppConfig(
         dials=[
             DialTarget(type="system", label="System"),
-            DialTarget(type="app", label="Firefox", app_name="Firefox", binary="firefox"),
+            DialTarget(
+                type="app",
+                label="Firefox",
+                app_name="Firefox",
+                app_id="org.mozilla.firefox",
+                binary="firefox",
+            ),
             DialTarget(type="none", label="None"),
             DialTarget(type="system", label="Headphones"),
         ],
@@ -52,6 +58,7 @@ def test_save_and_load_config(tmp_path) -> None:
     assert loaded.volume_step_hz == 30
     assert loaded.dials[1].type == "app"
     assert loaded.dials[1].label == "Firefox"
+    assert loaded.dials[1].app_id == "org.mozilla.firefox"
     assert loaded.dials[1].binary == "firefox"
     assert loaded.button_actions[1].type == "set_output"
     assert loaded.button_actions[1].output_name == "sink.headphones"
@@ -94,7 +101,7 @@ def test_load_config_ignores_unknown_and_invalid_values(tmp_path) -> None:
 {
   "version": 99,
   "dials": [
-    {"type": "app", "label": "Firefox", "binary": "firefox", "stream_id": "42", "extra": "ignored"},
+    {"type": "app", "label": "Firefox", "app_id": "org.mozilla.firefox", "binary": "firefox", "stream_id": "42", "extra": "ignored"},
     {"type": "bogus", "label": ""}
   ],
   "button_actions": [
@@ -117,7 +124,8 @@ def test_load_config_ignores_unknown_and_invalid_values(tmp_path) -> None:
     config = load_config(path)
 
     assert config.dials[0].type == "app"
-    assert config.dials[0].stream_id == 42
+    assert config.dials[0].app_id == "org.mozilla.firefox"
+    assert not hasattr(config.dials[0], "stream_id")
     assert config.dials[1].type == "none"
     assert config.button_actions[0].type == "set_output"
     assert config.button_actions[0].output_name == "sink.headphones"

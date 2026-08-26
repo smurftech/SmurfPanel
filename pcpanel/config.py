@@ -22,8 +22,8 @@ class DialTarget:
     type: TargetType = "none"
     label: str = "None"
     app_name: str | None = None
+    app_id: str | None = None
     binary: str | None = None
-    stream_id: int | None = None
 
 
 @dataclass
@@ -166,8 +166,8 @@ def _dial_from_dict(data: object) -> DialTarget:
         type=target_type,
         label=label,
         app_name=_optional_str_from_value(data.get("app_name")),
+        app_id=_optional_str_from_value(data.get("app_id")),
         binary=_optional_str_from_value(data.get("binary")),
-        stream_id=_optional_int_from_value(data.get("stream_id")),
     )
 
 
@@ -223,19 +223,6 @@ def _int_from_value(value: object, default: int) -> int:
         except ValueError:
             return default
     return default
-
-
-def _optional_int_from_value(value: object) -> int | None:
-    if value is None or isinstance(value, bool):
-        return None
-    if isinstance(value, int):
-        return value
-    if isinstance(value, str):
-        try:
-            return int(value)
-        except ValueError:
-            return None
-    return None
 
 
 def _str_from_value(value: object, default: str) -> str:
