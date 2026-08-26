@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 AUTOSTART_FILENAME = "pcpanel-gui.desktop"
-APP_NAME = "PCPanel"
+APP_NAME = "SmurfPanel"
 
 
 def autostart_path() -> Path:

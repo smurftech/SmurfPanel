@@ -78,7 +78,7 @@ class MainWindow(QMainWindow):
         self._allow_close = False
         self.tray_icon: QSystemTrayIcon | None = None
 
-        self.setWindowTitle("PCPanel")
+        self.setWindowTitle("SmurfPanel")
         self.setWindowIcon(app_icon())
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
         self.setMinimumSize(900, 560)
@@ -110,9 +110,9 @@ class MainWindow(QMainWindow):
         header_frame.setObjectName("HeaderBar")
         header = QHBoxLayout(header_frame)
         header.setContentsMargins(14, 12, 14, 12)
-        title = QLabel("PCPanel")
+        title = QLabel("SmurfPanel")
         title.setObjectName("Title")
-        subtitle = QLabel("USB audio control surface")
+        subtitle = QLabel("// DEVICE CONTROL")
         subtitle.setObjectName("Subtitle")
         title_stack = QVBoxLayout()
         title_stack.setSpacing(2)
@@ -198,10 +198,10 @@ class MainWindow(QMainWindow):
 
         icon = app_icon()
         self.tray_icon = QSystemTrayIcon(icon, self)
-        self.tray_icon.setToolTip("PCPanel")
+        self.tray_icon.setToolTip("SmurfPanel")
 
         menu = QMenu(self)
-        show_action = QAction("Show PCPanel", self)
+        show_action = QAction("Show SmurfPanel", self)
         hide_action = QAction("Hide to tray", self)
         quit_action = QAction("Quit", self)
         show_action.triggered.connect(self.show_from_tray)
@@ -439,7 +439,7 @@ class MainWindow(QMainWindow):
         if self.reader is None:
             return
         if self.reader_status is None or self.reader_status.state != "connected":
-            self.statusBar().showMessage("LED update waiting for PCPanel connection")
+            self.statusBar().showMessage("LED update waiting for PCPanel Mini connection")
             return
         try:
             payload = build_mini_dial_colors(colors_for_device(self.config.lighting.dials))
@@ -461,7 +461,7 @@ class MainWindow(QMainWindow):
         self.hide()
         if self.tray_icon is not None:
             self.tray_icon.showMessage(
-                "PCPanel",
+                "SmurfPanel",
                 "Still running in the system tray.",
                 QSystemTrayIcon.MessageIcon.Information,
                 1800,
@@ -553,7 +553,7 @@ class MainWindow(QMainWindow):
         self.config_state.style().polish(self.config_state)
         self.save_button.setEnabled(dirty)
         self.revert_button.setEnabled(dirty)
-        self.setWindowTitle("PCPanel *" if dirty else "PCPanel")
+        self.setWindowTitle("SmurfPanel *" if dirty else "SmurfPanel")
 
     def closeEvent(self, event) -> None:
         if self._allow_close or self.tray_icon is None:
@@ -666,7 +666,7 @@ def app_version() -> str:
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the PCPanel GUI")
+    parser = argparse.ArgumentParser(description="Run the SmurfPanel GUI")
     parser.add_argument("-v", "--verbose", action="store_true", help="enable debug logging")
     parser.add_argument("--config", type=Path, default=default_config_path(), help="config file path")
     args = parser.parse_args()
@@ -677,7 +677,7 @@ def main() -> None:
     )
 
     app = QApplication(sys.argv)
-    app.setApplicationName("PCPanel")
+    app.setApplicationName("SmurfPanel")
     app.setStyleSheet(APP_STYLE)
     window = MainWindow(config_path=args.config)
     window.setWindowState(Qt.WindowState.WindowNoState)

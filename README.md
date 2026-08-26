@@ -1,6 +1,7 @@
-# PCPanel
+# SmurfPanel
 
-Clean runtime for a USB controller with four dials and four buttons.
+Smurftech device-control application for PCPanel Mini hardware with four dials
+and four buttons.
 
 The original prototype files and USB captures are archived in `archive/`. The
 new implementation is organized around the runtime path:
@@ -100,20 +101,20 @@ python -m pcpanel --diagnose
 
 ## USB Permissions
 
-Install the included udev rule once so PCPanel can access the USB device as the
+Install the included udev rule once so SmurfPanel can access the USB device as the
 signed-in desktop user:
 
 ```bash
 ./scripts/install_udev_rules.sh
 ```
 
-Then unplug and reconnect the PCPanel. Confirm the result with:
+Then unplug and reconnect the PCPanel Mini. Confirm the result with:
 
 ```bash
 python -m pcpanel --diagnose
 ```
 
-Remove the rule if PCPanel is no longer installed:
+Remove the rule if SmurfPanel is no longer installed:
 
 ```bash
 ./scripts/uninstall_udev_rules.sh
@@ -150,11 +151,15 @@ Install it into your user application menu:
 ./scripts/install_desktop.sh
 ```
 
-After installing, launch it from your app menu as `PCPanel` or from a terminal:
+After installing, launch it from your app menu as `SmurfPanel` or from a terminal:
 
 ```bash
 pcpanel-gui
 ```
+
+Editable/package installs also provide the branded `smurfpanel` and
+`smurfpanel-gui` command aliases. The existing `pcpanel` commands and config
+path remain supported for compatibility.
 
 Update an installed copy after making code changes:
 
@@ -186,8 +191,8 @@ Notes:
 - The normal runtime talks to the PulseAudio-compatible server through
   `pulsectl`; this works with PipeWire-Pulse as used by current Linux desktops.
 - `pactl` remains useful for diagnostics and the fallback backend.
-- Install the included udev rule before normal use; do not run PCPanel as root.
-- Only one PCPanel process can own the USB interface at a time.
+- Install the included udev rule before normal use; do not run SmurfPanel as root.
+- Only one SmurfPanel process can own the PCPanel Mini USB interface at a time.
 
 ## Config
 
@@ -264,4 +269,4 @@ The hardware, desktop lifecycle, and clean-system checks are documented in
 
 1. Validate the standalone bundle and udev install flow on a clean Linux system.
 2. Decide whether desktop autostart is sufficient or add a systemd user service.
-3. Align the visual layer with the shared Smurftech brand/devkit while retaining the current control-surface layout.
+3. Automate tagged SmurfPanel release bundles and checksums.

@@ -12,7 +12,7 @@ from typing import Literal, cast
 TargetType = Literal["none", "system", "app"]
 ButtonActionType = Literal["mute", "set_output", "toggle_output"]
 CONFIG_VERSION = 2
-DEFAULT_LIGHTING_COLORS = ["#4DA3FF", "#35D0BA", "#A78BFA", "#F7C948"]
+DEFAULT_LIGHTING_COLORS = ["#0D6EFD", "#4FC3FF", "#E6F0FF", "#F2F4F7"]
 HEX_COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 LOGGER = logging.getLogger(__name__)
 
@@ -29,7 +29,7 @@ class DialTarget:
 @dataclass
 class DialLighting:
     enabled: bool = True
-    color: str = "#4DA3FF"
+    color: str = "#0D6EFD"
 
 
 @dataclass

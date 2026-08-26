@@ -11,7 +11,7 @@ def test_diagnostics_report_ready_system(monkeypatch) -> None:
 
     assert all(check.ok for check in checks)
     assert format_diagnostics(checks) == (
-        "PASS pactl: pactl command found\nPASS usb: PCPanel USB device detected"
+        "PASS pactl: pactl command found\nPASS usb: PCPanel Mini USB device detected"
     )
 
 

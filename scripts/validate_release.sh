@@ -25,4 +25,4 @@ if [[ "${1:-}" == "--build" ]]; then
   test -x "$ROOT_DIR/dist/pcpanel-gui/pcpanel-gui"
 fi
 
-echo "PCPanel release validation passed."
+echo "SmurfPanel release validation passed."

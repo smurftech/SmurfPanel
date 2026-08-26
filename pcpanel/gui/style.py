@@ -6,14 +6,14 @@ CHANNEL_COLORS = DEFAULT_LIGHTING_COLORS
 
 APP_STYLE = """
 QWidget {
-    background: #101316;
-    color: #F2F5F7;
+    background: #0C111A;
+    color: #F2F4F7;
     font-family: Inter, "Segoe UI", Arial, sans-serif;
     font-size: 13px;
 }
 
 QMainWindow {
-    background: #101316;
+    background: #0C111A;
 }
 
 QLabel {
@@ -23,8 +23,8 @@ QLabel {
 QFrame#HeaderBar,
 QFrame#SidePanel,
 QFrame#ChannelStrip {
-    background: #181D22;
-    border: 1px solid #303842;
+    background: #121826;
+    border: 1px solid #1E2A3A;
     border-radius: 8px;
 }
 
@@ -33,15 +33,15 @@ QFrame#ChannelStrip[muted="true"] {
 }
 
 QFrame#ChannelStrip[unmapped="true"] {
-    border-color: #252D35;
+    border-color: #1E2A3A;
 }
 
 QLabel#TargetState,
 QLabel#ConfigBadge {
-    background: #20262D;
-    border: 1px solid #303842;
+    background: #1E2A3A;
+    border: 1px solid #1E2A3A;
     border-radius: 7px;
-    color: #98A4AF;
+    color: rgba(230, 240, 255, 0.68);
     font-size: 11px;
     font-weight: 600;
     padding: 4px 7px;
@@ -60,9 +60,9 @@ QLabel#TargetState[state="waiting"] {
 }
 
 QLabel#TargetState[state="system"] {
-    background: #182A3A;
-    border-color: #4DA3FF;
-    color: #B9DBFF;
+    background: #1E2A3A;
+    border-color: #0D6EFD;
+    color: #E6F0FF;
 }
 
 QLabel#ConfigBadge[dirty="true"] {
@@ -72,21 +72,29 @@ QLabel#ConfigBadge[dirty="true"] {
 }
 
 QLabel#Title {
+    font-family: Orbitron, Rajdhani, Inter, "Segoe UI", sans-serif;
     font-size: 24px;
+    font-weight: 700;
+}
+
+QLabel#ChannelTitle,
+QLabel#SectionTitle,
+QLabel#TargetLabel {
+    font-family: Rajdhani, Inter, "Segoe UI", sans-serif;
     font-weight: 700;
 }
 
 QLabel#Subtitle,
 QLabel#Meta,
 QLabel#SmallText {
-    color: #98A4AF;
+    color: rgba(230, 240, 255, 0.68);
 }
 
 QLabel#DeviceBadge,
 QLabel#MuteBadge,
 QPushButton#MuteBadge {
-    background: #20262D;
-    border: 1px solid #303842;
+    background: #1E2A3A;
+    border: 1px solid #1E2A3A;
     border-radius: 8px;
     padding: 6px 10px;
 }
@@ -111,10 +119,10 @@ QLabel#DeviceBadge[state="stopped"] {
 }
 
 QLabel#AppChip {
-    background: #20262D;
-    border: 1px solid #303842;
+    background: #1E2A3A;
+    border: 1px solid #1E2A3A;
     border-radius: 8px;
-    color: #F2F5F7;
+    color: #F2F4F7;
     font-weight: 600;
     padding: 7px 10px;
 }
@@ -135,7 +143,7 @@ QPushButton#MuteBadge[muted="false"] {
 
 QLabel#MuteBadge[muted="unknown"],
 QPushButton#MuteBadge[muted="unknown"] {
-    color: #66727D;
+    color: rgba(230, 240, 255, 0.38);
 }
 
 QLabel#PercentText {
@@ -144,8 +152,8 @@ QLabel#PercentText {
 }
 
 QProgressBar {
-    background: #20262D;
-    border: 1px solid #303842;
+    background: #1E2A3A;
+    border: 1px solid #1E2A3A;
     border-radius: 6px;
     color: transparent;
 }
@@ -157,60 +165,60 @@ QProgressBar::chunk {
 QComboBox,
 QPushButton,
 QCheckBox {
-    background: #20262D;
-    border: 1px solid #303842;
+    background: #1E2A3A;
+    border: 1px solid #1E2A3A;
     border-radius: 6px;
-    color: #F2F5F7;
+    color: #F2F4F7;
     padding: 7px 9px;
 }
 
 QPushButton#ColorSwatch {
-    border: 1px solid #303842;
+    border: 1px solid #1E2A3A;
     border-radius: 6px;
     padding: 0;
 }
 
 QPushButton#ColorSwatch:disabled {
-    border-color: #252D35;
+    border-color: #1E2A3A;
 }
 
 QComboBox:hover,
 QPushButton:hover {
-    border-color: #4DA3FF;
+    border-color: #4FC3FF;
 }
 
 QPushButton:pressed {
-    background: #26313A;
+    background: #1E2A3A;
 }
 
 QPushButton#PrimaryButton:enabled {
-    background: #245E9B;
-    border-color: #4DA3FF;
-    color: #FFFFFF;
+    background: #0D6EFD;
+    border-color: #4FC3FF;
+    color: #F2F4F7;
     font-weight: 700;
 }
 
 QPushButton:disabled {
-    background: #181D22;
-    border-color: #252D35;
-    color: #66727D;
+    background: #121826;
+    border-color: #1E2A3A;
+    color: rgba(230, 240, 255, 0.38);
 }
 
 QComboBox:focus,
 QPushButton:focus,
 QCheckBox:focus {
-    border-color: #7AB9FF;
+    border-color: #4FC3FF;
 }
 
 QComboBox QAbstractItemView {
-    background: #181D22;
-    border: 1px solid #303842;
-    color: #F2F5F7;
-    selection-background-color: #26313A;
+    background: #121826;
+    border: 1px solid #1E2A3A;
+    color: #F2F4F7;
+    selection-background-color: #0D6EFD;
 }
 
 QStatusBar {
-    background: #101316;
-    color: #98A4AF;
+    background: #0C111A;
+    color: rgba(230, 240, 255, 0.68);
 }
 """
