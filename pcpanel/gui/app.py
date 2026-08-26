@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import logging
 import sys
+from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Qt, Signal, Slot
@@ -257,13 +258,16 @@ class MainWindow(QMainWindow):
             LOGGER.exception("Failed to handle event")
             return
 
+        target = self.config.dials[event.control_index]
         self.rows[event.control_index].set_event(event)
         if event.kind == ControlKind.BUTTON and event.is_pressed:
+            action = self.config.button_actions[event.control_index]
+            if action.type == "mute" and target.type == "app" and action_message:
+                self._update_cached_app_mute(target)
             self.refresh_status()
             if action_message:
                 self.statusBar().showMessage(action_message)
                 return
-        target = self.config.dials[event.control_index]
         self.statusBar().showMessage(
             f"{event.kind.value.title()} {event.control_number} -> {target.label} ({event.value})"
         )
@@ -335,8 +339,13 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Mute failed: {exc}")
             LOGGER.exception("Mute failed")
             return
+        self._update_cached_app_mute(target)
         self.statusBar().showMessage(f"Toggled mute for {target.label}")
         self.refresh_status()
+
+    def _update_cached_app_mute(self, target: DialTarget) -> None:
+        self.streams = toggled_app_mute_streams(self.streams, target)
+        self.audio.set_cached_streams(self.streams)
 
     def on_osd_toggled(self, enabled: bool) -> None:
         self.config.osd_enabled = enabled
@@ -492,6 +501,19 @@ def target_matches_stream(target: DialTarget, stream: AudioStream) -> bool:
     if target.binary and stream.binary == target.binary:
         return True
     return bool(target.app_name and stream.name == target.app_name)
+
+
+def toggled_app_mute_streams(
+    streams: list[AudioStream], target: DialTarget
+) -> list[AudioStream]:
+    matches = [stream for stream in streams if target_matches_stream(target, stream)]
+    if not matches:
+        return streams
+    muted = not all(bool(stream.muted) for stream in matches)
+    return [
+        replace(stream, muted=muted) if target_matches_stream(target, stream) else stream
+        for stream in streams
+    ]
 
 
 def build_target_options(
