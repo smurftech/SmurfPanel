@@ -39,6 +39,17 @@ The GUI starts the same controller path as the CLI, shows live dial movement,
 shows mute state, edits the config file, and can enable launch-on-login from
 the bottom control bar.
 
+Each channel shows whether its target is active, waiting for an application,
+using the system output, or unassigned. Configuration changes remain explicit:
+use `Save config` to persist them or `Revert` to restore the last saved file.
+Quitting with pending changes offers Save, Discard, and Cancel choices.
+
+GUI shortcuts:
+
+- `Ctrl+S`: save configuration
+- `Ctrl+Shift+R`: revert unsaved configuration changes
+- `F5`: refresh applications and output devices
+
 The bottom control bar also includes an `About` popup with app version,
 creator, website, device, backend, config, and startup-path details.
 

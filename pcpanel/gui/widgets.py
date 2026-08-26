@@ -59,6 +59,11 @@ class ChannelStrip(QFrame):
         self.target_label.setWordWrap(True)
         layout.addWidget(self.target_label)
 
+        self.target_state = QLabel("Unassigned")
+        self.target_state.setObjectName("TargetState")
+        self.target_state.setProperty("state", "none")
+        layout.addWidget(self.target_state)
+
         self.meter = QProgressBar()
         self.meter.setOrientation(Qt.Orientation.Vertical)
         self.meter.setRange(0, 100)
@@ -140,6 +145,20 @@ class ChannelStrip(QFrame):
         self.target_label.setText(target.label)
         self.setProperty("unmapped", target.type == "none")
         self._refresh_style()
+
+    def set_target_availability(self, target: DialTarget, active: bool | None) -> None:
+        if target.type == "system":
+            text, state = "System output", "system"
+        elif target.type == "none":
+            text, state = "Unassigned", "none"
+        elif active:
+            text, state = "Active now", "active"
+        else:
+            text, state = "Waiting for app", "waiting"
+        self.target_state.setText(text)
+        self.target_state.setProperty("state", state)
+        self.target_state.style().unpolish(self.target_state)
+        self.target_state.style().polish(self.target_state)
 
     def set_mute_state(self, muted: bool | None) -> None:
         if muted is None:
