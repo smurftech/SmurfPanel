@@ -7,7 +7,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from PySide6.QtCore import QObject, QTimer, Qt, Signal, Slot
-from PySide6.QtGui import QAction, QColor
+from PySide6.QtGui import QAction, QColor, QKeySequence, QShortcut
 from PySide6.QtWidgets import (
     QApplication,
     QCheckBox,
@@ -28,7 +28,15 @@ from PySide6.QtWidgets import (
 from pcpanel import __version__
 from pcpanel.autostart import is_autostart_enabled, set_autostart_enabled
 from pcpanel.audio import AudioStream, CachedPactlAudioBackend, OutputDevice
-from pcpanel.config import AppConfig, ButtonAction, DialTarget, default_config_path, load_config, save_config
+from pcpanel.config import (
+    AppConfig,
+    ButtonAction,
+    DialTarget,
+    config_to_json,
+    default_config_path,
+    load_config,
+    save_config,
+)
 from pcpanel.controller import Controller
 from pcpanel.events import ControlEvent, ControlKind
 from pcpanel.gui.osd import DialOsd
@@ -54,6 +62,7 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.config_path = config_path
         self.config = load_config(config_path)
+        self._saved_config_json = config_to_json(self.config)
         self.audio = CachedPactlAudioBackend()
         self.osd = DialOsd()
         self.controller = Controller(config=self.config, audio=self.audio, osd=self.osd)
@@ -138,8 +147,13 @@ class MainWindow(QMainWindow):
         self.about_button = QPushButton("About")
         self.refresh_button = QPushButton("Refresh audio")
         self.save_button = QPushButton("Save config")
+        self.save_button.setObjectName("PrimaryButton")
+        self.save_button.setToolTip("Save configuration (Ctrl+S)")
+        self.revert_button = QPushButton("Revert")
+        self.revert_button.setToolTip("Discard unsaved configuration changes (Ctrl+Shift+R)")
         self.config_state = QLabel("Config saved")
-        self.config_state.setObjectName("Meta")
+        self.config_state.setObjectName("ConfigBadge")
+        self.config_state.setProperty("dirty", "false")
         controls.addWidget(self.osd_enabled)
         controls.addWidget(self.debug_enabled)
         controls.addWidget(self.startup_enabled)
@@ -147,6 +161,7 @@ class MainWindow(QMainWindow):
         controls.addWidget(self.config_state)
         controls.addWidget(self.about_button)
         controls.addWidget(self.refresh_button)
+        controls.addWidget(self.revert_button)
         controls.addWidget(self.save_button)
         layout.addLayout(controls)
 
@@ -157,6 +172,7 @@ class MainWindow(QMainWindow):
         self.bridge.reader_status.connect(self.on_reader_status)
         self.refresh_button.clicked.connect(self.refresh_audio_state)
         self.save_button.clicked.connect(self.save_current_config)
+        self.revert_button.clicked.connect(self.revert_current_config)
         self.osd_enabled.toggled.connect(self.on_osd_toggled)
         self.debug_enabled.toggled.connect(self.on_debug_toggled)
         self.startup_enabled.toggled.connect(self.on_startup_toggled)
@@ -166,6 +182,14 @@ class MainWindow(QMainWindow):
             row.mute_clicked.connect(self.on_mute_clicked)
             row.led_toggled.connect(self.on_led_toggled)
             row.led_color_clicked.connect(self.on_led_color_clicked)
+
+        self.save_shortcut = QShortcut(QKeySequence.StandardKey.Save, self)
+        self.save_shortcut.activated.connect(self.save_current_config)
+        self.revert_shortcut = QShortcut(QKeySequence("Ctrl+Shift+R"), self)
+        self.revert_shortcut.activated.connect(self.revert_current_config)
+        self.refresh_shortcut = QShortcut(QKeySequence("F5"), self)
+        self.refresh_shortcut.activated.connect(self.refresh_audio_state)
+        self.set_config_dirty(False)
 
     def _build_tray(self) -> None:
         if not QSystemTrayIcon.isSystemTrayAvailable():
@@ -233,6 +257,9 @@ class MainWindow(QMainWindow):
         self.reader_status = status
         label, message = reader_status_text(status)
         self.device_state.setText(label)
+        self.device_state.setProperty("state", status.state)
+        self.device_state.style().unpolish(self.device_state)
+        self.device_state.style().polish(self.device_state)
         self.statusBar().showMessage(message)
         if status.state == "connected":
             QTimer.singleShot(250, self.apply_lighting)
@@ -279,14 +306,17 @@ class MainWindow(QMainWindow):
             system_mute = None
         for index, row in enumerate(self.rows):
             target = self.config.dials[index]
+            active: bool | None = None
             if target.type == "system":
                 row.set_mute_state(system_mute)
             elif target.type == "app":
                 stream = next((item for item in self.streams if target_matches_stream(target, item)), None)
+                active = stream is not None
                 row.set_mute_state(stream.muted if stream else None)
             else:
                 row.set_mute_state(None)
             row.set_target_label(target)
+            row.set_target_availability(target, active)
 
     def refresh_initial_volumes(self) -> None:
         try:
@@ -439,6 +469,8 @@ class MainWindow(QMainWindow):
 
     @Slot()
     def quit_from_tray(self) -> None:
+        if not self.confirm_pending_changes():
+            return
         self._allow_close = True
         self.controller.stop()
         if self.tray_icon is not None:
@@ -456,26 +488,78 @@ class MainWindow(QMainWindow):
             else:
                 self.show_from_tray()
 
-    def save_current_config(self) -> None:
+    def save_current_config(self) -> bool:
+        if not self._config_dirty:
+            return True
         try:
             save_config(self.config, self.config_path)
         except Exception as exc:
             QMessageBox.critical(self, "Save failed", str(exc))
-            return
+            return False
+        self._saved_config_json = config_to_json(self.config)
         self.set_config_dirty(False)
         self.statusBar().showMessage(f"Saved config to {self.config_path}")
+        return True
+
+    def revert_current_config(self) -> None:
+        if not self._config_dirty:
+            return
+        choice = QMessageBox.question(
+            self,
+            "Revert configuration?",
+            "Discard all unsaved configuration changes?",
+            QMessageBox.StandardButton.Discard | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Cancel,
+        )
+        if choice != QMessageBox.StandardButton.Discard:
+            return
+        self.config = load_config(self.config_path)
+        self._saved_config_json = config_to_json(self.config)
+        self.controller.config = self.config
+        self.osd_enabled.blockSignals(True)
+        self.osd_enabled.setChecked(self.config.osd_enabled)
+        self.osd_enabled.blockSignals(False)
+        self.rebuild_target_options()
+        self.refresh_initial_volumes()
+        self.refresh_status()
+        self.apply_lighting()
+        self.set_config_dirty(False)
+        self.statusBar().showMessage("Reverted unsaved configuration changes")
+
+    def confirm_pending_changes(self) -> bool:
+        if not self._config_dirty:
+            return True
+        choice = QMessageBox.warning(
+            self,
+            "Unsaved configuration",
+            "Save configuration changes before quitting?",
+            QMessageBox.StandardButton.Save
+            | QMessageBox.StandardButton.Discard
+            | QMessageBox.StandardButton.Cancel,
+            QMessageBox.StandardButton.Save,
+        )
+        if choice == QMessageBox.StandardButton.Save:
+            return self.save_current_config()
+        return choice == QMessageBox.StandardButton.Discard
 
     def mark_config_dirty(self) -> None:
-        self.set_config_dirty(True)
+        self.set_config_dirty(config_is_dirty(self.config, self._saved_config_json))
 
     def set_config_dirty(self, dirty: bool) -> None:
         self._config_dirty = dirty
         self.config_state.setText("Unsaved changes" if dirty else "Config saved")
-        self.save_button.setText("Save config *" if dirty else "Save config")
+        self.config_state.setProperty("dirty", "true" if dirty else "false")
+        self.config_state.style().unpolish(self.config_state)
+        self.config_state.style().polish(self.config_state)
+        self.save_button.setEnabled(dirty)
+        self.revert_button.setEnabled(dirty)
         self.setWindowTitle("PCPanel *" if dirty else "PCPanel")
 
     def closeEvent(self, event) -> None:
         if self._allow_close or self.tray_icon is None:
+            if not self._allow_close and not self.confirm_pending_changes():
+                event.ignore()
+                return
             self.controller.stop()
             self.osd.hide()
             super().closeEvent(event)
@@ -491,6 +575,10 @@ class MainWindow(QMainWindow):
 
 def target_key(target: DialTarget) -> tuple[str, str | None, str | None, str | None]:
     return (target.type, target.app_id, target.binary, target.app_name)
+
+
+def config_is_dirty(config: AppConfig, saved_config_json: str) -> bool:
+    return config_to_json(config) != saved_config_json
 
 
 def target_matches_stream(target: DialTarget, stream: AudioStream) -> bool:
