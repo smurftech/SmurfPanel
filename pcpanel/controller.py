@@ -7,8 +7,8 @@ import threading
 from pathlib import Path
 from collections.abc import Callable
 
-from pcpanel.audio import AudioBackend, PactlAudioBackend
-from pcpanel.config import AppConfig, DialTarget, load_config
+from pcpanel.audio import AudioBackend, CachedPactlAudioBackend
+from pcpanel.config import AppConfig, ButtonAction, DialTarget, load_config
 from pcpanel.events import ControlEvent, ControlKind
 from pcpanel.osd import LoggingOsd, Osd
 from pcpanel.usb_reader import PyUsbReader
@@ -26,7 +26,7 @@ class Controller:
         reader_factory: Callable[[Callable[[ControlEvent], None], threading.Event], threading.Thread] | None = None,
     ) -> None:
         self.config = config or load_config(config_path)
-        self.audio = audio or PactlAudioBackend()
+        self.audio = audio or CachedPactlAudioBackend()
         self.osd = osd or LoggingOsd()
         self.stop_event = threading.Event()
         self.events: queue.Queue[ControlEvent] = queue.Queue()
@@ -52,6 +52,9 @@ class Controller:
 
     def stop(self) -> None:
         self.stop_event.set()
+        close = getattr(self.audio, "close", None)
+        if callable(close):
+            close()
 
     def inject_dial(self, control_index: int, value: int) -> None:
         self.handle_event(
@@ -64,7 +67,7 @@ class Controller:
             )
         )
 
-    def handle_event(self, event: ControlEvent) -> None:
+    def handle_event(self, event: ControlEvent) -> str | None:
         LOGGER.debug(
             "Received %s %s value=%s raw=%s",
             event.kind.value,
@@ -80,14 +83,14 @@ class Controller:
             target.type,
             target.label,
         )
-        if target.type == "none":
-            LOGGER.debug("%s %s is unmapped", event.kind.value, event.control_number)
-            return
-
         if event.kind == ControlKind.DIAL:
+            if target.type == "none":
+                LOGGER.debug("%s %s is unmapped", event.kind.value, event.control_number)
+                return None
             self._handle_dial(target, event)
         elif event.kind == ControlKind.BUTTON and event.is_pressed:
-            self._handle_button(target)
+            return self._handle_button(self.config.button_actions[event.control_index], target)
+        return None
 
     def _handle_dial(self, target: DialTarget, event: ControlEvent) -> None:
         previous_percent = self._last_dial_percent.get(event.control_index)
@@ -97,12 +100,13 @@ class Controller:
         self._last_dial_percent[event.control_index] = event.percent
         self.audio.set_volume(target, event.percent)
         if self.config.osd_enabled:
-            self.osd.show_volume(target.label, event.percent)
+            self.osd.show_volume(target.label, event.percent, event.control_index)
 
-    def _handle_button(self, target: DialTarget) -> None:
-        self.audio.toggle_mute(target)
+    def _handle_button(self, action: ButtonAction, target: DialTarget) -> str | None:
+        message = self.audio.run_button_action(action, target)
         if self.config.osd_enabled:
-            self.osd.show_mute(target.label)
+            self.osd.show_mute(message or target.label)
+        return message
 
     @staticmethod
     def _default_reader_factory(on_event, stop_event):

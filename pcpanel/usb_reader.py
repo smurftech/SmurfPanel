@@ -4,6 +4,8 @@ import errno
 import logging
 import threading
 from collections.abc import Callable
+from dataclasses import dataclass
+from typing import Literal
 
 import usb.core
 import usb.util
@@ -17,6 +19,16 @@ LOGGER = logging.getLogger(__name__)
 VENDOR_ID = 0x0483
 PRODUCT_ID = 0xA3C4
 READ_TIMEOUT_MS = 100
+RECONNECT_DELAY_SECONDS = 1.0
+MAX_RECONNECT_DELAY_SECONDS = 8.0
+
+ReaderState = Literal["starting", "connected", "reconnecting", "stopped"]
+
+
+@dataclass(frozen=True)
+class ReaderStatus:
+    state: ReaderState
+    message: str
 
 
 class PyUsbReader(threading.Thread):
@@ -24,12 +36,14 @@ class PyUsbReader(threading.Thread):
         self,
         on_event: Callable[[ControlEvent], None],
         stop_event: threading.Event,
+        on_status: Callable[[ReaderStatus], None] | None = None,
         vendor_id: int = VENDOR_ID,
         product_id: int = PRODUCT_ID,
     ) -> None:
         super().__init__(daemon=True)
         self.on_event = on_event
         self.stop_event = stop_event
+        self.on_status = on_status
         self.vendor_id = vendor_id
         self.product_id = product_id
         self._device = None
@@ -37,32 +51,52 @@ class PyUsbReader(threading.Thread):
         self._device_lock = threading.Lock()
 
     def run(self) -> None:
-        try:
-            endpoint = self._open_endpoint()
-            while not self.stop_event.is_set():
-                try:
-                    with self._device_lock:
-                        data = self._device.read(
-                            endpoint.bEndpointAddress,
-                            endpoint.wMaxPacketSize,
-                            timeout=READ_TIMEOUT_MS,
-                        )
-                except usb.core.USBError as exc:
-                    if getattr(exc, "errno", None) in (errno.ETIMEDOUT, None):
-                        continue
-                    LOGGER.warning("USB read failed: %s", exc)
-                    break
+        self._notify("starting", "Opening PCPanel USB device")
+        failure_count = 0
 
-                try:
-                    report = bytes(data)
-                    LOGGER.debug("USB report raw=%s", report.hex()[:32])
-                    self.on_event(parse_report(report))
-                except ReportParseError as exc:
-                    LOGGER.debug("Ignoring unsupported report: %s", exc)
-        except Exception:
-            LOGGER.exception("USB reader stopped unexpectedly")
-        finally:
-            self.close()
+        while not self.stop_event.is_set():
+            try:
+                endpoint = self._open_endpoint()
+                failure_count = 0
+                self._notify("connected", "PCPanel connected")
+                self._read_loop(endpoint)
+            except Exception as exc:
+                if self.stop_event.is_set():
+                    break
+                failure_count += 1
+                LOGGER.warning("USB reader will reconnect after failure: %s", exc)
+                self._notify("reconnecting", str(exc))
+            finally:
+                self.close()
+
+            if not self.stop_event.is_set():
+                delay = reconnect_delay_for_attempt(failure_count)
+                LOGGER.debug("USB reconnect retry in %.1fs", delay)
+                self.stop_event.wait(delay)
+
+        self._notify("stopped", "USB reader stopped")
+
+    def _read_loop(self, endpoint) -> None:
+        while not self.stop_event.is_set():
+            try:
+                with self._device_lock:
+                    data = self._device.read(
+                        endpoint.bEndpointAddress,
+                        endpoint.wMaxPacketSize,
+                        timeout=READ_TIMEOUT_MS,
+                    )
+            except usb.core.USBError as exc:
+                if _is_timeout_error(exc):
+                    continue
+                LOGGER.warning("USB read failed: %s", exc)
+                raise RuntimeError(f"USB read failed: {exc}") from exc
+
+            try:
+                report = bytes(data)
+                LOGGER.debug("USB report raw=%s", report.hex()[:32])
+                self.on_event(parse_report(report))
+            except ReportParseError as exc:
+                LOGGER.debug("Ignoring unsupported report: %s", exc)
 
     def send_output_report(self, payload: bytes) -> None:
         if self._device is None:
@@ -82,6 +116,16 @@ class PyUsbReader(threading.Thread):
         except usb.core.USBError:
             LOGGER.debug("Unable to reattach kernel driver", exc_info=True)
         usb.util.dispose_resources(self._device)
+        self._device = None
+        self._interface_number = None
+
+    def _notify(self, state: ReaderState, message: str) -> None:
+        if self.on_status is None:
+            return
+        try:
+            self.on_status(ReaderStatus(state=state, message=message))
+        except Exception:
+            LOGGER.debug("USB status callback failed", exc_info=True)
 
     def _open_endpoint(self):
         device = usb.core.find(idVendor=self.vendor_id, idProduct=self.product_id)
@@ -144,6 +188,23 @@ class PyUsbReader(threading.Thread):
             endpoint.bEndpointAddress,
         )
         return endpoint
+
+
+def reconnect_delay_for_attempt(failure_count: int) -> float:
+    if failure_count <= 0:
+        return RECONNECT_DELAY_SECONDS
+    return min(
+        RECONNECT_DELAY_SECONDS * (2 ** min(failure_count - 1, 3)),
+        MAX_RECONNECT_DELAY_SECONDS,
+    )
+
+
+def _is_timeout_error(exc: usb.core.USBError) -> bool:
+    if getattr(exc, "errno", None) == errno.ETIMEDOUT:
+        return True
+    if getattr(exc, "backend_error_code", None) == -7:
+        return True
+    return "timed out" in str(exc).lower()
 
 
 def _detach_kernel_drivers(device) -> None:

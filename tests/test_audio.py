@@ -1,4 +1,13 @@
-from pcpanel.audio import parse_pactl_mute, parse_pactl_volume, parse_sink_inputs
+from pcpanel.audio import (
+    AudioStream,
+    CachedPactlAudioBackend,
+    OutputDevice,
+    parse_sinks,
+    parse_pactl_mute,
+    parse_pactl_volume,
+    parse_sink_inputs,
+)
+from pcpanel.config import ButtonAction, DialTarget
 
 
 def test_parse_pactl_system_volume() -> None:
@@ -16,6 +25,7 @@ def test_parse_sink_inputs_extracts_stable_metadata() -> None:
 Sink Input #42
     Properties:
         application.name = "Firefox"
+        application.id = "org.mozilla.firefox"
         application.process.binary = "firefox"
         media.name = "AudioStream"
     Volume: front-left: 32768 / 50% / -18.06 dB, front-right: 32768 / 50% / -18.06 dB
@@ -27,5 +37,168 @@ Sink Input #42
     assert streams[0].id == 42
     assert streams[0].name == "Firefox"
     assert streams[0].binary == "firefox"
+    assert streams[0].app_id == "org.mozilla.firefox"
     assert streams[0].volume == 50
     assert streams[0].muted is False
+
+
+def test_parse_sinks_extracts_output_devices() -> None:
+    devices = parse_sinks(
+        """
+Sink #1
+    State: RUNNING
+    Name: alsa_output.pci-speakers
+    Description: Speakers
+Sink #2
+    State: IDLE
+    Name: bluez_output.headphones
+    Description: Headphones
+"""
+    )
+
+    assert devices == [
+        OutputDevice(name="alsa_output.pci-speakers", label="Speakers"),
+        OutputDevice(name="bluez_output.headphones", label="Headphones"),
+    ]
+
+
+def test_cached_backend_resolves_app_stream_without_refreshing(monkeypatch) -> None:
+    backend = CachedPactlAudioBackend()
+    backend.set_cached_streams([AudioStream(id=42, name="Firefox", binary="firefox")])
+
+    def fail_if_called():
+        raise AssertionError("cached app lookup should not refresh streams")
+
+    monkeypatch.setattr(backend, "list_streams", fail_if_called)
+
+    stream_id = backend._resolve_stream_id(
+        DialTarget(type="app", label="Firefox", app_name="Firefox", binary="firefox")
+    )
+
+    assert stream_id == 42
+
+
+class RecordingCachedBackend(CachedPactlAudioBackend):
+    def __init__(self) -> None:
+        super().__init__()
+        self.outputs = []
+
+    def set_output_device(self, output_name: str) -> None:
+        self.outputs.append(output_name)
+        self.set_cached_default_output_name(output_name)
+
+
+def test_button_action_sets_output_device() -> None:
+    backend = RecordingCachedBackend()
+
+    message = backend.run_button_action(
+        ButtonAction(
+            type="set_output",
+            output_name="bluez_output.headphones",
+            output_label="Headphones",
+        ),
+        DialTarget(type="none", label="None"),
+    )
+
+    assert backend.outputs == ["bluez_output.headphones"]
+    assert message == "Changed output to Headphones"
+
+
+def test_button_action_toggles_between_outputs() -> None:
+    backend = RecordingCachedBackend()
+    backend.set_cached_default_output_name("alsa_output.speakers")
+    action = ButtonAction(
+        type="toggle_output",
+        output_name="alsa_output.speakers",
+        output_label="Speakers",
+        toggle_output_name="bluez_output.headphones",
+        toggle_output_label="Headphones",
+    )
+
+    first_message = backend.run_button_action(action, DialTarget(type="none", label="None"))
+    second_message = backend.run_button_action(action, DialTarget(type="none", label="None"))
+
+    assert backend.outputs == ["bluez_output.headphones", "alsa_output.speakers"]
+    assert first_message == "Changed output to Headphones"
+    assert second_message == "Changed output to Speakers"
+
+
+class FakeVolume:
+    def __init__(self, value_flat: float) -> None:
+        self.value_flat = value_flat
+
+
+class FakeSinkInput:
+    def __init__(
+        self,
+        index: int,
+        binary: str,
+        name: str = "Firefox",
+        mute: bool = False,
+        app_id: str | None = None,
+    ) -> None:
+        self.index = index
+        self.name = name
+        self.mute = mute
+        self.volume = FakeVolume(0.5)
+        self.proplist = {
+            "application.name": name,
+            "application.process.binary": binary,
+            "application.id": app_id,
+        }
+
+
+class FakePulse:
+    def __init__(self, streams) -> None:
+        self.streams = streams
+        self.volume_calls = []
+        self.mute_calls = []
+
+    def sink_input_list(self):
+        return list(self.streams)
+
+    def volume_set_all_chans(self, stream, level: float) -> None:
+        self.volume_calls.append((stream.index, level))
+
+    def mute(self, stream, muted: bool) -> None:
+        self.mute_calls.append((stream.index, muted))
+        stream.mute = muted
+
+
+def test_persistent_backend_controls_all_streams_for_same_app() -> None:
+    backend = CachedPactlAudioBackend()
+    backend._pulse = FakePulse(
+        [
+            FakeSinkInput(41, "firefox"),
+            FakeSinkInput(42, "firefox"),
+            FakeSinkInput(99, "spotify", name="Spotify"),
+        ]
+    )
+    target = DialTarget(type="app", label="Firefox", app_name="Firefox", binary="firefox")
+
+    backend.set_volume(target, 65)
+    backend.toggle_mute(target)
+
+    assert backend._pulse.volume_calls == [(41, 0.65), (42, 0.65)]
+    assert backend._pulse.mute_calls == [(41, True), (42, True)]
+
+
+def test_persistent_backend_prefers_stable_app_id() -> None:
+    backend = CachedPactlAudioBackend()
+    backend._pulse = FakePulse(
+        [
+            FakeSinkInput(41, "shared-host", name="Browser", app_id="org.mozilla.firefox"),
+            FakeSinkInput(42, "shared-host", name="Browser", app_id="com.google.Chrome"),
+        ]
+    )
+    target = DialTarget(
+        type="app",
+        label="Firefox",
+        app_name="Browser",
+        app_id="org.mozilla.firefox",
+        binary="shared-host",
+    )
+
+    backend.set_volume(target, 25)
+
+    assert backend._pulse.volume_calls == [(41, 0.25)]

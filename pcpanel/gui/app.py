@@ -24,15 +24,18 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from pcpanel.audio import AudioStream, PactlAudioBackend
-from pcpanel.config import AppConfig, DialTarget, default_config_path, load_config, save_config
+from pcpanel import __version__
+from pcpanel.autostart import is_autostart_enabled, set_autostart_enabled
+from pcpanel.audio import AudioStream, CachedPactlAudioBackend, OutputDevice
+from pcpanel.config import AppConfig, ButtonAction, DialTarget, default_config_path, load_config, save_config
 from pcpanel.controller import Controller
 from pcpanel.events import ControlEvent, ControlKind
+from pcpanel.gui.osd import DialOsd
 from pcpanel.gui.resources import app_icon
 from pcpanel.gui.style import APP_STYLE, CHANNEL_COLORS
-from pcpanel.gui.widgets import ChannelStrip, StreamList
+from pcpanel.gui.widgets import AboutDialog, ChannelStrip, DialOptionsDialog, StreamList
 from pcpanel.lighting import build_mini_dial_colors, colors_for_device
-from pcpanel.usb_reader import PyUsbReader
+from pcpanel.usb_reader import PyUsbReader, ReaderStatus
 
 
 LOGGER = logging.getLogger(__name__)
@@ -42,7 +45,7 @@ WINDOW_HEIGHT = 720
 
 class EventBridge(QObject):
     event_received = Signal(object)
-    reader_stopped = Signal()
+    reader_status = Signal(object)
 
 
 class MainWindow(QMainWindow):
@@ -50,13 +53,18 @@ class MainWindow(QMainWindow):
         super().__init__()
         self.config_path = config_path
         self.config = load_config(config_path)
-        self.audio = PactlAudioBackend()
-        self.controller = Controller(config=self.config, audio=self.audio)
+        self.audio = CachedPactlAudioBackend()
+        self.osd = DialOsd()
+        self.controller = Controller(config=self.config, audio=self.audio, osd=self.osd)
         self.bridge = EventBridge()
         self.reader: PyUsbReader | None = None
+        self.reader_status: ReaderStatus | None = None
         self.streams: list[AudioStream] = []
+        self.output_devices: list[OutputDevice] = []
+        self.default_output_name: str | None = None
         self.rows = [ChannelStrip(index, CHANNEL_COLORS[index]) for index in range(4)]
         self._refreshing_targets = False
+        self._config_dirty = False
         self._allow_close = False
         self.tray_icon: QSystemTrayIcon | None = None
 
@@ -69,7 +77,7 @@ class MainWindow(QMainWindow):
         self._build_tray()
         self._connect_signals()
 
-        self.refresh_streams()
+        self.refresh_audio_state()
         self.refresh_initial_volumes()
         self.refresh_status()
         self.start_reader()
@@ -124,11 +132,19 @@ class MainWindow(QMainWindow):
         self.osd_enabled = QCheckBox("OSD enabled")
         self.osd_enabled.setChecked(self.config.osd_enabled)
         self.debug_enabled = QCheckBox("Debug reports")
-        self.refresh_button = QPushButton("Refresh apps")
+        self.startup_enabled = QCheckBox("Open on startup")
+        self.startup_enabled.setChecked(is_autostart_enabled())
+        self.about_button = QPushButton("About")
+        self.refresh_button = QPushButton("Refresh audio")
         self.save_button = QPushButton("Save config")
+        self.config_state = QLabel("Config saved")
+        self.config_state.setObjectName("Meta")
         controls.addWidget(self.osd_enabled)
         controls.addWidget(self.debug_enabled)
+        controls.addWidget(self.startup_enabled)
         controls.addStretch(1)
+        controls.addWidget(self.config_state)
+        controls.addWidget(self.about_button)
         controls.addWidget(self.refresh_button)
         controls.addWidget(self.save_button)
         layout.addLayout(controls)
@@ -137,12 +153,15 @@ class MainWindow(QMainWindow):
 
     def _connect_signals(self) -> None:
         self.bridge.event_received.connect(self.on_event_received)
-        self.refresh_button.clicked.connect(self.refresh_streams)
+        self.bridge.reader_status.connect(self.on_reader_status)
+        self.refresh_button.clicked.connect(self.refresh_audio_state)
         self.save_button.clicked.connect(self.save_current_config)
         self.osd_enabled.toggled.connect(self.on_osd_toggled)
         self.debug_enabled.toggled.connect(self.on_debug_toggled)
+        self.startup_enabled.toggled.connect(self.on_startup_toggled)
+        self.about_button.clicked.connect(self.show_about_dialog)
         for index, row in enumerate(self.rows):
-            row.target_changed.connect(self.on_target_changed)
+            row.options_clicked.connect(self.on_options_clicked)
             row.mute_clicked.connect(self.on_mute_clicked)
             row.led_toggled.connect(self.on_led_toggled)
             row.led_color_clicked.connect(self.on_led_color_clicked)
@@ -173,11 +192,14 @@ class MainWindow(QMainWindow):
         self.tray_icon.show()
 
     def start_reader(self) -> None:
-        self.reader = PyUsbReader(on_event=self.bridge.event_received.emit, stop_event=self.controller.stop_event)
+        self.reader = PyUsbReader(
+            on_event=self.bridge.event_received.emit,
+            stop_event=self.controller.stop_event,
+            on_status=self.bridge.reader_status.emit,
+        )
         self.reader.start()
-        self.device_state.setText("Device: connected")
-        self.statusBar().showMessage("USB reader started")
-        QTimer.singleShot(250, self.apply_lighting)
+        self.device_state.setText("Device: starting")
+        self.statusBar().showMessage("USB reader starting")
 
     def refresh_streams(self) -> None:
         try:
@@ -185,60 +207,51 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             self.statusBar().showMessage(f"Could not refresh app streams: {exc}")
             self.streams = []
+            self.audio.set_cached_streams(self.streams)
         self.stream_list.set_streams(self.streams)
         self.rebuild_target_options()
 
+    def refresh_outputs(self) -> None:
+        try:
+            self.output_devices = self.audio.list_output_devices()
+            self.default_output_name = self.audio.get_default_output_name()
+        except Exception as exc:
+            self.statusBar().showMessage(f"Could not refresh output devices: {exc}")
+            self.output_devices = []
+            self.default_output_name = None
+        self.audio.set_cached_output_devices(self.output_devices)
+        self.audio.set_cached_default_output_name(self.default_output_name)
+        self.rebuild_target_options()
+
+    def refresh_audio_state(self) -> None:
+        self.refresh_streams()
+        self.refresh_outputs()
+
+    @Slot(object)
+    def on_reader_status(self, status: ReaderStatus) -> None:
+        self.reader_status = status
+        label, message = reader_status_text(status)
+        self.device_state.setText(label)
+        self.statusBar().showMessage(message)
+        if status.state == "connected":
+            QTimer.singleShot(250, self.apply_lighting)
+
     def rebuild_target_options(self) -> None:
         self._refreshing_targets = True
-        options = self._target_options()
         for index, row in enumerate(self.rows):
-            row.target.clear()
             current = self.config.dials[index]
-            current_key = target_key(current)
-            selected_index = 0
-            for option_index, (label, target) in enumerate(options):
-                row.target.addItem(label, target)
-                if target_key(target) == current_key:
-                    selected_index = option_index
-            if current_key not in {target_key(target) for _, target in options}:
-                row.target.addItem(f"{current.label} (saved)", current)
-                selected_index = row.target.count() - 1
-            row.target.setCurrentIndex(selected_index)
             row.set_target_label(current)
             lighting = self.config.lighting.dials[index]
             row.set_led_state(lighting.enabled, lighting.color)
         self._refreshing_targets = False
 
     def _target_options(self) -> list[tuple[str, DialTarget]]:
-        options: list[tuple[str, DialTarget]] = [
-            ("None", DialTarget(type="none", label="None")),
-            ("System", DialTarget(type="system", label="System")),
-        ]
-        name_counts: dict[str, int] = {}
-        for stream in self.streams:
-            name_counts[stream.name] = name_counts.get(stream.name, 0) + 1
-        for stream in self.streams:
-            label = stream.name
-            if name_counts[stream.name] > 1 and stream.binary:
-                label = f"{stream.name} ({stream.binary})"
-            options.append(
-                (
-                    label,
-                    DialTarget(
-                        type="app",
-                        label=stream.name,
-                        app_name=stream.name,
-                        binary=stream.binary,
-                        stream_id=None,
-                    ),
-                )
-            )
-        return options
+        return build_target_options(self.config.dials, self.streams)
 
     @Slot(object)
     def on_event_received(self, event: ControlEvent) -> None:
         try:
-            self.controller.handle_event(event)
+            action_message = self.controller.handle_event(event)
         except Exception as exc:
             self.statusBar().showMessage(f"Event failed: {exc}")
             LOGGER.exception("Failed to handle event")
@@ -247,6 +260,9 @@ class MainWindow(QMainWindow):
         self.rows[event.control_index].set_event(event)
         if event.kind == ControlKind.BUTTON and event.is_pressed:
             self.refresh_status()
+            if action_message:
+                self.statusBar().showMessage(action_message)
+                return
         target = self.config.dials[event.control_index]
         self.statusBar().showMessage(
             f"{event.kind.value.title()} {event.control_number} -> {target.label} ({event.value})"
@@ -257,13 +273,12 @@ class MainWindow(QMainWindow):
             system_mute = self.audio.get_system_mute()
         except Exception:
             system_mute = None
-        stream_by_key = {stream_key(stream): stream for stream in self.streams}
         for index, row in enumerate(self.rows):
             target = self.config.dials[index]
             if target.type == "system":
                 row.set_mute_state(system_mute)
             elif target.type == "app":
-                stream = stream_by_key.get((target.app_name, target.binary))
+                stream = next((item for item in self.streams if target_matches_stream(target, item)), None)
                 row.set_mute_state(stream.muted if stream else None)
             else:
                 row.set_mute_state(None)
@@ -274,26 +289,39 @@ class MainWindow(QMainWindow):
             system_volume = self.audio.get_system_volume()
         except Exception:
             system_volume = None
-        stream_by_key = {stream_key(stream): stream for stream in self.streams}
         for index, row in enumerate(self.rows):
             target = self.config.dials[index]
             if target.type == "system":
                 row.set_volume_state(system_volume)
             elif target.type == "app":
-                stream = stream_by_key.get((target.app_name, target.binary))
+                stream = next((item for item in self.streams if target_matches_stream(target, item)), None)
                 row.set_volume_state(stream.volume if stream else None)
 
     @Slot(int)
-    def on_target_changed(self, index: int) -> None:
+    def on_options_clicked(self, index: int) -> None:
         if self._refreshing_targets:
             return
-        target = self.rows[index].target.currentData()
-        if isinstance(target, DialTarget):
-            self.config.dials[index] = target
-            self.controller.config = self.config
-            self.rows[index].set_target_label(target)
-            self.statusBar().showMessage(f"Dial {index + 1} mapped to {target.label}")
-            self.refresh_status()
+        dialog = DialOptionsDialog(
+            parent=self,
+            dial_number=index + 1,
+            current_target=self.config.dials[index],
+            current_action=self.config.button_actions[index],
+            target_options=self._target_options(),
+            output_devices=self.output_devices,
+        )
+        if not dialog.exec():
+            return
+        target = dialog.selected_target()
+        action = dialog.selected_button_action()
+        self.config.dials[index] = target
+        self.config.button_actions[index] = action
+        self.controller.config = self.config
+        self.mark_config_dirty()
+        self.rows[index].set_target_label(target)
+        self.statusBar().showMessage(
+            f"Dial {index + 1}: {target.label}, press {button_action_label(action)}"
+        )
+        self.refresh_status()
 
     @Slot(int)
     def on_mute_clicked(self, index: int) -> None:
@@ -313,14 +341,39 @@ class MainWindow(QMainWindow):
     def on_osd_toggled(self, enabled: bool) -> None:
         self.config.osd_enabled = enabled
         self.controller.config = self.config
+        self.mark_config_dirty()
+        if not enabled:
+            self.osd.hide()
 
     def on_debug_toggled(self, enabled: bool) -> None:
         for row in self.rows:
             row.set_debug_visible(enabled)
 
+    def on_startup_toggled(self, enabled: bool) -> None:
+        try:
+            set_autostart_enabled(enabled)
+        except Exception as exc:
+            self.startup_enabled.blockSignals(True)
+            self.startup_enabled.setChecked(not enabled)
+            self.startup_enabled.blockSignals(False)
+            self.statusBar().showMessage(f"Startup setting failed: {exc}")
+            LOGGER.exception("Startup setting failed")
+            return
+        state = "enabled" if enabled else "disabled"
+        self.statusBar().showMessage(f"Open on startup {state}")
+
+    def show_about_dialog(self) -> None:
+        dialog = AboutDialog(
+            parent=self,
+            version=app_version(),
+            config_path=str(self.config_path),
+        )
+        dialog.exec()
+
     @Slot(int, bool)
     def on_led_toggled(self, index: int, enabled: bool) -> None:
         self.config.lighting.dials[index].enabled = enabled
+        self.mark_config_dirty()
         lighting = self.config.lighting.dials[index]
         self.rows[index].set_led_state(lighting.enabled, lighting.color)
         self.apply_lighting()
@@ -337,6 +390,7 @@ class MainWindow(QMainWindow):
             return
         current.color = selected.name().upper()
         current.enabled = True
+        self.mark_config_dirty()
         self.rows[index].set_led_state(current.enabled, current.color)
         self.apply_lighting()
 
@@ -344,6 +398,9 @@ class MainWindow(QMainWindow):
         if not self.config.lighting.enabled:
             return
         if self.reader is None:
+            return
+        if self.reader_status is None or self.reader_status.state != "connected":
+            self.statusBar().showMessage("LED update waiting for PCPanel connection")
             return
         try:
             payload = build_mini_dial_colors(colors_for_device(self.config.lighting.dials))
@@ -396,11 +453,22 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.critical(self, "Save failed", str(exc))
             return
+        self.set_config_dirty(False)
         self.statusBar().showMessage(f"Saved config to {self.config_path}")
+
+    def mark_config_dirty(self) -> None:
+        self.set_config_dirty(True)
+
+    def set_config_dirty(self, dirty: bool) -> None:
+        self._config_dirty = dirty
+        self.config_state.setText("Unsaved changes" if dirty else "Config saved")
+        self.save_button.setText("Save config *" if dirty else "Save config")
+        self.setWindowTitle("PCPanel *" if dirty else "PCPanel")
 
     def closeEvent(self, event) -> None:
         if self._allow_close or self.tray_icon is None:
             self.controller.stop()
+            self.osd.hide()
             super().closeEvent(event)
             return
         event.ignore()
@@ -412,12 +480,79 @@ class MainWindow(QMainWindow):
         super().changeEvent(event)
 
 
-def target_key(target: DialTarget) -> tuple[str, str | None, str | None, str]:
-    return (target.type, target.app_name, target.binary, target.label)
+def target_key(target: DialTarget) -> tuple[str, str | None, str | None, str | None]:
+    return (target.type, target.app_id, target.binary, target.app_name)
 
 
-def stream_key(stream: AudioStream) -> tuple[str, str | None]:
-    return (stream.name, stream.binary)
+def target_matches_stream(target: DialTarget, stream: AudioStream) -> bool:
+    if target.type != "app":
+        return False
+    if target.app_id and stream.app_id:
+        return stream.app_id == target.app_id
+    if target.binary and stream.binary == target.binary:
+        return True
+    return bool(target.app_name and stream.name == target.app_name)
+
+
+def build_target_options(
+    saved_targets: list[DialTarget], streams: list[AudioStream]
+) -> list[tuple[str, DialTarget]]:
+    options = [
+        ("None", DialTarget(type="none", label="None")),
+        ("System", DialTarget(type="system", label="System")),
+    ]
+    seen: set[tuple[str, str | None, str | None, str | None]] = {
+        target_key(target) for _, target in options
+    }
+    for stream in streams:
+        target = DialTarget(
+            type="app",
+            label=stream.name,
+            app_name=stream.name,
+            app_id=stream.app_id,
+            binary=stream.binary,
+        )
+        key = target_key(target)
+        if key in seen:
+            continue
+        seen.add(key)
+        detail = stream.binary or stream.app_id
+        display = f"{stream.name} ({detail})" if detail else stream.name
+        options.append((display, target))
+
+    for target in saved_targets:
+        key = target_key(target)
+        if target.type != "app" or key in seen:
+            continue
+        seen.add(key)
+        active = any(target_matches_stream(target, stream) for stream in streams)
+        suffix = "active" if active else "inactive"
+        options.append((f"{target.label} (saved, {suffix})", target))
+    return options
+
+
+def reader_status_text(status: ReaderStatus) -> tuple[str, str]:
+    if status.state == "connected":
+        return ("Device: connected", status.message)
+    if status.state == "starting":
+        return ("Device: starting", status.message)
+    if status.state == "reconnecting":
+        return ("Device: reconnecting", f"USB reconnecting: {status.message}")
+    return ("Device: stopped", status.message)
+
+
+def button_action_label(action: ButtonAction) -> str:
+    if action.type == "set_output":
+        return f"set output to {action.output_label or action.output_name or 'unassigned'}"
+    if action.type == "toggle_output":
+        first = action.output_label or action.output_name or "unassigned"
+        second = action.toggle_output_label or action.toggle_output_name or "unassigned"
+        return f"toggle {first} / {second}"
+    return "mute/unmute"
+
+
+def app_version() -> str:
+    return __version__
 
 
 def main() -> None:
