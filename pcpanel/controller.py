@@ -39,7 +39,7 @@ class Controller:
         reader = self.reader_factory(self.events.put, self.stop_event)
         reader.start()
 
-        LOGGER.info("PCPanel controller started")
+        LOGGER.info("SmurfPanel controller started")
         while not self.stop_event.is_set():
             try:
                 event = self.events.get(timeout=0.25)

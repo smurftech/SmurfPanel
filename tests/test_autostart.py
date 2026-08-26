@@ -8,7 +8,7 @@ def test_set_autostart_enabled_writes_desktop_entry(tmp_path) -> None:
 
     content = path.read_text(encoding="utf-8")
     assert "Type=Application" in content
-    assert "Name=PCPanel" in content
+    assert "Name=SmurfPanel" in content
     assert "Exec=/opt/pcpanel/pcpanel-gui" in content
     assert is_autostart_enabled(path) is True
 

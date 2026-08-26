@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "pcpanel"
 version = "0.1.0"
-description = "Low-latency controller for a PCPanel USB mixer"
+description = "SmurfPanel low-latency controller for PCPanel Mini hardware"
 requires-python = ">=3.11"
 dependencies = [
   "pyusb>=1.2.1",
@@ -24,6 +24,8 @@ build = [
 [project.scripts]
 pcpanel = "pcpanel.__main__:main"
 pcpanel-gui = "pcpanel.gui.app:main"
+smurfpanel = "pcpanel.__main__:main"
+smurfpanel-gui = "pcpanel.gui.app:main"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

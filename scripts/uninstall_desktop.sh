@@ -19,5 +19,5 @@ if command -v gtk-update-icon-cache >/dev/null 2>&1; then
   gtk-update-icon-cache "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
 fi
 
-echo "Uninstalled PCPanel GUI user app."
+echo "Uninstalled SmurfPanel user app."
 echo "Config was left untouched at: $HOME/.config/pcpanel/config.json"

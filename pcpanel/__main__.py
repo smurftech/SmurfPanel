@@ -11,7 +11,7 @@ from pcpanel.diagnostics import format_diagnostics, run_diagnostics
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Run the PCPanel controller")
+    parser = argparse.ArgumentParser(description="Run the SmurfPanel controller")
     parser.add_argument("-v", "--verbose", action="store_true", help="enable debug logging")
     parser.add_argument(
         "--diagnose",

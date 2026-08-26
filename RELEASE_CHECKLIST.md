@@ -1,4 +1,4 @@
-# PCPanel Release Checklist
+# SmurfPanel Release Checklist
 
 ## Automated validation
 
@@ -12,7 +12,7 @@
 ## Clean-system and permissions validation
 
 - [ ] Install the udev rule with `./scripts/install_udev_rules.sh`.
-- [ ] Unplug and reconnect the PCPanel.
+- [ ] Unplug and reconnect the PCPanel Mini.
 - [ ] Run `pcpanel --diagnose` and confirm every check passes.
 - [ ] Confirm the app connects without root privileges.
 - [ ] Confirm a missing rule produces an actionable permission message.

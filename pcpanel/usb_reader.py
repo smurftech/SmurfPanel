@@ -51,14 +51,14 @@ class PyUsbReader(threading.Thread):
         self._device_lock = threading.Lock()
 
     def run(self) -> None:
-        self._notify("starting", "Opening PCPanel USB device")
+        self._notify("starting", "Opening PCPanel Mini USB device")
         failure_count = 0
 
         while not self.stop_event.is_set():
             try:
                 endpoint = self._open_endpoint()
                 failure_count = 0
-                self._notify("connected", "PCPanel connected")
+                self._notify("connected", "PCPanel Mini connected")
                 self._read_loop(endpoint)
             except Exception as exc:
                 if self.stop_event.is_set():
@@ -148,7 +148,7 @@ class PyUsbReader(threading.Thread):
             except usb.core.USBError as retry_exc:
                 if getattr(retry_exc, "errno", None) == errno.EBUSY:
                     raise RuntimeError(
-                        "USB device is busy. Close any other PCPanel process, unplug/replug "
+                        "USB device is busy. Close any other SmurfPanel process, unplug/replug "
                         "the device, or check whether the kernel HID driver is still attached."
                     ) from retry_exc
                 raise
@@ -181,7 +181,7 @@ class PyUsbReader(threading.Thread):
             if getattr(exc, "errno", None) == errno.EBUSY:
                 raise RuntimeError(
                     "USB interface is busy. Another process or kernel driver is using the "
-                    "PCPanel device."
+                    "PCPanel Mini device."
                 ) from exc
             raise
         self._device = device
@@ -205,7 +205,7 @@ def reconnect_delay_for_attempt(failure_count: int) -> float:
 
 def usb_permission_error_message() -> str:
     return (
-        "Permission denied opening PCPanel USB device 0483:a3c4. "
+        "Permission denied opening PCPanel Mini USB device 0483:a3c4. "
         "Install the udev rule with scripts/install_udev_rules.sh, then unplug "
         "and reconnect the device."
     )

@@ -75,7 +75,7 @@ def test_missing_config_returns_default(tmp_path) -> None:
     assert config.dials[0].type == "system"
     assert config.dials[1].type == "none"
     assert config.button_actions[0].type == "mute"
-    assert config.lighting.dials[0].color == "#4DA3FF"
+    assert config.lighting.dials[0].color == "#0D6EFD"
 
 
 def test_config_json_includes_version() -> None:
@@ -134,7 +134,7 @@ def test_load_config_ignores_unknown_and_invalid_values(tmp_path) -> None:
     assert config.volume_step_hz == 30
     assert config.lighting.enabled is True
     assert config.lighting.dials[0].enabled is False
-    assert config.lighting.dials[0].color == "#4DA3FF"
+    assert config.lighting.dials[0].color == "#0D6EFD"
 
 
 def test_load_config_uses_defaults_for_malformed_json(tmp_path) -> None:

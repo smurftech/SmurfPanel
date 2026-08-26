@@ -14,5 +14,5 @@ sudo install -m 0644 "$RULE_SOURCE" "$RULE_DESTINATION"
 sudo udevadm control --reload-rules
 sudo udevadm trigger --subsystem-match=usb --attr-match=idVendor=0483 --attr-match=idProduct=a3c4
 
-echo "Installed PCPanel USB permissions at $RULE_DESTINATION"
-echo "Unplug and reconnect the PCPanel before launching the app."
+echo "Installed PCPanel Mini USB permissions at $RULE_DESTINATION"
+echo "Unplug and reconnect the PCPanel Mini before launching SmurfPanel."

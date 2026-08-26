@@ -1,1 +1,1 @@
-"""Bundled assets for PCPanel."""
+"""Bundled assets for SmurfPanel."""
