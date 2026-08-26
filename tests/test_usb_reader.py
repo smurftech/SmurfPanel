@@ -3,7 +3,12 @@ import threading
 
 import usb.core
 
-from pcpanel.usb_reader import PyUsbReader, _is_timeout_error, reconnect_delay_for_attempt
+from pcpanel.usb_reader import (
+    PyUsbReader,
+    _is_timeout_error,
+    reconnect_delay_for_attempt,
+    usb_permission_error_message,
+)
 
 
 class FlakyReader(PyUsbReader):
@@ -60,3 +65,11 @@ def test_timeout_detection_does_not_treat_unknown_usb_errors_as_timeouts() -> No
 
     assert _is_timeout_error(timeout) is True
     assert _is_timeout_error(unknown) is False
+
+
+def test_usb_permission_error_is_actionable() -> None:
+    message = usb_permission_error_message()
+
+    assert "0483:a3c4" in message
+    assert "scripts/install_udev_rules.sh" in message
+    assert "unplug" in message.lower()

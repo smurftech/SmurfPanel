@@ -3,6 +3,7 @@ Type=Application
 Name=PCPanel
 Comment=USB audio control surface
 Exec=__EXEC_PATH__
+TryExec=__EXEC_PATH__
 Icon=pcpanel
 Terminal=false
 Categories=AudioVideo;Audio;Settings;

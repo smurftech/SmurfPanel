@@ -17,7 +17,7 @@ The runtime now includes:
 - controller loop separated from UI/debug code
 - persistent `pulsectl` backend for normal PulseAudio / PipeWire-Pulse control
 - `pactl` subprocess backend retained as a diagnostic/fallback implementation
-- application targets resolved by stable binary/name metadata and applied to all matching active streams
+- application targets resolved by stable application ID/binary/name metadata and applied to all matching active streams
 - automatic USB reconnect with bounded backoff after device loss or failed opens
 - GUI device status driven by the real USB connection lifecycle
 - GUI OSD overlay with one independent status bar per dial
@@ -81,10 +81,41 @@ List active application streams:
 python -m pcpanel --list-streams
 ```
 
+Check system readiness and USB detection:
+
+```bash
+python -m pcpanel --diagnose
+```
+
+## USB Permissions
+
+Install the included udev rule once so PCPanel can access the USB device as the
+signed-in desktop user:
+
+```bash
+./scripts/install_udev_rules.sh
+```
+
+Then unplug and reconnect the PCPanel. Confirm the result with:
+
+```bash
+python -m pcpanel --diagnose
+```
+
+Remove the rule if PCPanel is no longer installed:
+
+```bash
+./scripts/uninstall_udev_rules.sh
+```
+
+The rule matches only the supported PCPanel Mini USB identifier `0483:a3c4`
+and grants access through the desktop session's `uaccess` policy.
+
 ## Build Standalone GUI
 
 The app can be bundled with PyInstaller. This produces a self-contained app
-folder for the Python/PySide6 code:
+folder for the Python/PySide6 code. Linux builds also require `objdump`,
+normally provided by the distribution's `binutils` package:
 
 ```bash
 python -m PyInstaller pcpanel-gui.spec --clean --noconfirm
@@ -144,8 +175,7 @@ Notes:
 - The normal runtime talks to the PulseAudio-compatible server through
   `pulsectl`; this works with PipeWire-Pulse as used by current Linux desktops.
 - `pactl` remains useful for diagnostics and the fallback backend.
-- The USB udev rule still needs to be installed so the app can access the device
-  without root.
+- Install the included udev rule before normal use; do not run PCPanel as root.
 - Only one PCPanel process can own the USB interface at a time.
 
 ## Config
@@ -157,18 +187,18 @@ Each dial target has this shape:
   "type": "system",
   "label": "System",
   "app_name": null,
-  "binary": null,
-  "stream_id": null
+  "app_id": null,
+  "binary": null
 }
 ```
 
 Target types:
 
 - `system`: controls the default system output.
-- `app`: controls an application. Prefer `binary` or `app_name` over
-  `stream_id`, because stream IDs change when apps restart. When an application
-  has multiple active audio streams, all matching streams are controlled
-  together.
+- `app`: controls an application using the stable `app_id` when available,
+  with `binary` and `app_name` fallbacks. Volatile stream IDs are not persisted.
+  When an application has multiple active audio streams, all matching streams
+  are controlled together.
 - `none`: ignores dial turns. Button presses still follow the saved button
   action for that dial.
 
@@ -179,8 +209,8 @@ Example app mapping:
   "type": "app",
   "label": "Firefox",
   "app_name": "Firefox",
-  "binary": "firefox",
-  "stream_id": null
+  "app_id": "org.mozilla.firefox",
+  "binary": "firefox"
 }
 ```
 
@@ -206,8 +236,21 @@ Button action types:
 The GUI lists available output devices and saves the selected device names in
 the config so the actions are active again on the next launch.
 
+## Release Validation
+
+Run the repeatable validation flow before promoting a release:
+
+```bash
+./scripts/validate_release.sh --build
+```
+
+This runs the automated suite, validates the example configuration, compiles
+the package, builds a wheel, and optionally creates the standalone GUI bundle.
+The hardware, desktop lifecycle, and clean-system checks are documented in
+`RELEASE_CHECKLIST.md`.
+
 ## Next Steps
 
-1. Add saved/stale app targets to the GUI even when an app is not currently playing.
-2. Add a systemd user service for login startup.
+1. Validate the standalone bundle and udev install flow on a clean Linux system.
+2. Decide whether desktop autostart is sufficient or add a systemd user service.
 3. Align the visual layer with the shared Smurftech brand/devkit while retaining the current control-surface layout.

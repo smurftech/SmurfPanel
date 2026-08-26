@@ -7,11 +7,17 @@ from pathlib import Path
 from pcpanel.audio import PactlAudioBackend
 from pcpanel.config import AppConfig, config_to_json, default_config_path, save_config
 from pcpanel.controller import Controller
+from pcpanel.diagnostics import format_diagnostics, run_diagnostics
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Run the PCPanel controller")
     parser.add_argument("-v", "--verbose", action="store_true", help="enable debug logging")
+    parser.add_argument(
+        "--diagnose",
+        action="store_true",
+        help="check USB detection and required system commands, then exit",
+    )
     parser.add_argument(
         "--config",
         type=Path,
@@ -46,6 +52,12 @@ def main() -> None:
     )
 
     config_path = args.config or default_config_path()
+    if args.diagnose:
+        checks = run_diagnostics()
+        print(format_diagnostics(checks))
+        if not all(check.ok for check in checks):
+            raise SystemExit(1)
+        return
     if args.print_default_config:
         print(config_to_json(AppConfig()))
         return
