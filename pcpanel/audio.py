@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import logging
 import re
 import subprocess
-import logging
 from dataclasses import dataclass
 from typing import Protocol
 
@@ -50,7 +50,7 @@ class AudioBackend(Protocol):
 
 
 class PactlAudioBackend:
-    """Small fallback backend. Prefer a pulsectl backend for production."""
+    """Subprocess fallback backend for diagnostics and compatibility."""
 
     def get_system_volume(self) -> int | None:
         result = self._run(["pactl", "get-sink-volume", "@DEFAULT_SINK@"], capture=True)
@@ -79,10 +79,11 @@ class PactlAudioBackend:
             LOGGER.info("Setting system volume to %s%%", percent)
             self._run(["pactl", "set-sink-volume", "@DEFAULT_SINK@", f"{percent}%"])
             return
-        stream_id = self._resolve_stream_id(target)
-        if stream_id is not None:
-            LOGGER.info("Setting stream %s volume to %s%%", stream_id, percent)
-            self._run(["pactl", "set-sink-input-volume", str(stream_id), f"{percent}%"])
+        stream_ids = self._resolve_stream_ids(target)
+        if stream_ids:
+            for stream_id in stream_ids:
+                LOGGER.info("Setting stream %s volume to %s%%", stream_id, percent)
+                self._run(["pactl", "set-sink-input-volume", str(stream_id), f"{percent}%"])
         else:
             LOGGER.warning("No active stream found for target %s", target.label)
 
@@ -122,25 +123,32 @@ class PactlAudioBackend:
             LOGGER.info("Toggling system mute")
             self._run(["pactl", "set-sink-mute", "@DEFAULT_SINK@", "toggle"])
             return
-        stream_id = self._resolve_stream_id(target)
-        if stream_id is not None:
-            LOGGER.info("Toggling stream %s mute", stream_id)
-            self._run(["pactl", "set-sink-input-mute", str(stream_id), "toggle"])
+        stream_ids = self._resolve_stream_ids(target)
+        if stream_ids:
+            for stream_id in stream_ids:
+                LOGGER.info("Toggling stream %s mute", stream_id)
+                self._run(["pactl", "set-sink-input-mute", str(stream_id), "toggle"])
         else:
             LOGGER.warning("No active stream found for target %s", target.label)
 
-    def _resolve_stream_id(self, target: DialTarget) -> int | None:
+    def _resolve_stream_ids(self, target: DialTarget) -> list[int]:
         if target.type != "app":
-            return None
+            return []
         if target.stream_id is not None:
-            return target.stream_id
+            return [target.stream_id]
 
-        for stream in self.list_streams():
-            if target.binary and stream.binary == target.binary:
-                return stream.id
-            if target.app_name and stream.name == target.app_name:
-                return stream.id
-        return None
+        streams = self.list_streams()
+        if target.binary:
+            matches = [stream.id for stream in streams if stream.binary == target.binary]
+            if matches:
+                return matches
+        if target.app_name:
+            return [stream.id for stream in streams if stream.name == target.app_name]
+        return []
+
+    def _resolve_stream_id(self, target: DialTarget) -> int | None:
+        stream_ids = self._resolve_stream_ids(target)
+        return stream_ids[0] if stream_ids else None
 
     def _toggle_output_name(self, action: ButtonAction) -> str | None:
         first = action.output_name
@@ -168,62 +176,10 @@ class PactlAudioBackend:
         return result
 
 
-class CachedPactlAudioBackend(PactlAudioBackend):
-    """Pactl backend that resolves app targets from a refreshed stream snapshot."""
-
-    def __init__(self) -> None:
-        self._streams: list[AudioStream] = []
-        self._outputs: list[OutputDevice] = []
-        self._default_output_name: str | None = None
-
-    def list_streams(self) -> list[AudioStream]:
-        self._streams = super().list_streams()
-        return list(self._streams)
-
-    def list_output_devices(self) -> list[OutputDevice]:
-        self._outputs = super().list_output_devices()
-        return list(self._outputs)
-
-    def get_default_output_name(self) -> str | None:
-        self._default_output_name = super().get_default_output_name()
-        return self._default_output_name
-
-    def set_cached_streams(self, streams: list[AudioStream]) -> None:
-        self._streams = list(streams)
-
-    def set_cached_output_devices(self, outputs: list[OutputDevice]) -> None:
-        self._outputs = list(outputs)
-
-    def set_cached_default_output_name(self, output_name: str | None) -> None:
-        self._default_output_name = output_name
-
-    def set_output_device(self, output_name: str) -> None:
-        super().set_output_device(output_name)
-        self._default_output_name = output_name
-
-    def _resolve_stream_id(self, target: DialTarget) -> int | None:
-        if target.type != "app":
-            return None
-        if target.stream_id is not None:
-            return target.stream_id
-
-        for stream in self._streams:
-            if target.binary and stream.binary == target.binary:
-                return stream.id
-            if target.app_name and stream.name == target.app_name:
-                return stream.id
-        return None
-
-    def _toggle_output_name(self, action: ButtonAction) -> str | None:
-        first = action.output_name
-        second = action.toggle_output_name
-        if not first:
-            return second
-        if not second:
-            return first
-        if self._default_output_name == first:
-            return second
-        return first
+# Keep the existing public name so the GUI and downstream code do not need a
+# broad compatibility migration in R1.1. The implementation is now persistent
+# PulseAudio/PipeWire-Pulse rather than cached pactl subprocess calls.
+from pcpanel.pulse_audio import PulseAudioBackend as CachedPactlAudioBackend  # noqa: E402
 
 
 def parse_pactl_volume(stdout: str) -> int | None:

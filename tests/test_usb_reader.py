@@ -1,6 +1,9 @@
+import errno
 import threading
 
-from pcpanel.usb_reader import PyUsbReader
+import usb.core
+
+from pcpanel.usb_reader import PyUsbReader, _is_timeout_error, reconnect_delay_for_attempt
 
 
 class FlakyReader(PyUsbReader):
@@ -37,3 +40,23 @@ def test_reader_reports_reconnect_and_connected(monkeypatch) -> None:
         "stopped",
     ]
     assert statuses[1].message == "device missing"
+
+
+def test_reconnect_backoff_is_bounded(monkeypatch) -> None:
+    monkeypatch.setattr("pcpanel.usb_reader.RECONNECT_DELAY_SECONDS", 1.0)
+    monkeypatch.setattr("pcpanel.usb_reader.MAX_RECONNECT_DELAY_SECONDS", 8.0)
+
+    assert reconnect_delay_for_attempt(0) == 1.0
+    assert reconnect_delay_for_attempt(1) == 1.0
+    assert reconnect_delay_for_attempt(2) == 2.0
+    assert reconnect_delay_for_attempt(3) == 4.0
+    assert reconnect_delay_for_attempt(4) == 8.0
+    assert reconnect_delay_for_attempt(10) == 8.0
+
+
+def test_timeout_detection_does_not_treat_unknown_usb_errors_as_timeouts() -> None:
+    timeout = usb.core.USBError("timed out", errno=errno.ETIMEDOUT)
+    unknown = usb.core.USBError("device vanished")
+
+    assert _is_timeout_error(timeout) is True
+    assert _is_timeout_error(unknown) is False

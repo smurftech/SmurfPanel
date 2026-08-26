@@ -119,3 +119,55 @@ def test_button_action_toggles_between_outputs() -> None:
     assert backend.outputs == ["bluez_output.headphones", "alsa_output.speakers"]
     assert first_message == "Changed output to Headphones"
     assert second_message == "Changed output to Speakers"
+
+
+class FakeVolume:
+    def __init__(self, value_flat: float) -> None:
+        self.value_flat = value_flat
+
+
+class FakeSinkInput:
+    def __init__(self, index: int, binary: str, name: str = "Firefox", mute: bool = False) -> None:
+        self.index = index
+        self.name = name
+        self.mute = mute
+        self.volume = FakeVolume(0.5)
+        self.proplist = {
+            "application.name": name,
+            "application.process.binary": binary,
+        }
+
+
+class FakePulse:
+    def __init__(self, streams) -> None:
+        self.streams = streams
+        self.volume_calls = []
+        self.mute_calls = []
+
+    def sink_input_list(self):
+        return list(self.streams)
+
+    def volume_set_all_chans(self, stream, level: float) -> None:
+        self.volume_calls.append((stream.index, level))
+
+    def mute(self, stream, muted: bool) -> None:
+        self.mute_calls.append((stream.index, muted))
+        stream.mute = muted
+
+
+def test_persistent_backend_controls_all_streams_for_same_app() -> None:
+    backend = CachedPactlAudioBackend()
+    backend._pulse = FakePulse(
+        [
+            FakeSinkInput(41, "firefox"),
+            FakeSinkInput(42, "firefox"),
+            FakeSinkInput(99, "spotify", name="Spotify"),
+        ]
+    )
+    target = DialTarget(type="app", label="Firefox", app_name="Firefox", binary="firefox")
+
+    backend.set_volume(target, 65)
+    backend.toggle_mute(target)
+
+    assert backend._pulse.volume_calls == [(41, 0.65), (42, 0.65)]
+    assert backend._pulse.mute_calls == [(41, True), (42, True)]
