@@ -40,7 +40,7 @@ from pcpanel.config import (
 from pcpanel.controller import Controller
 from pcpanel.events import ControlEvent, ControlKind
 from pcpanel.gui.osd import DialOsd
-from pcpanel.gui.resources import app_icon
+from pcpanel.gui.resources import app_icon, load_brand_fonts
 from pcpanel.gui.style import APP_STYLE, CHANNEL_COLORS
 from pcpanel.gui.widgets import AboutDialog, ChannelStrip, DialOptionsDialog, StreamList
 from pcpanel.lighting import build_mini_dial_colors, colors_for_device
@@ -678,6 +678,8 @@ def main() -> None:
 
     app = QApplication(sys.argv)
     app.setApplicationName("SmurfPanel")
+    loaded_fonts = load_brand_fonts()
+    LOGGER.info("Loaded SmurfPanel brand fonts: %s", ", ".join(sorted(loaded_fonts)))
     app.setStyleSheet(APP_STYLE)
     window = MainWindow(config_path=args.config)
     window.setWindowState(Qt.WindowState.WindowNoState)

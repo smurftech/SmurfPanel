@@ -33,3 +33,6 @@ testpaths = ["tests"]
 [tool.setuptools.packages.find]
 include = ["pcpanel*"]
 exclude = ["archive*", "packaging*", "scripts*", "tests*", "tmp*"]
+
+[tool.setuptools.package-data]
+"pcpanel.assets" = ["pcpanel.svg", "fonts/**/*.ttf", "fonts/**/OFL.txt"]
