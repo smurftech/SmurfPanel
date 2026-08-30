@@ -36,6 +36,9 @@
 
 ## Release handoff
 
-- [ ] Update version and release notes when assigning a release tag.
+- [ ] Update `project.version` in `pyproject.toml` and release notes.
 - [ ] Merge the milestone branch into `dev`, then promote the validated `dev` branch to `main`.
-- [ ] Tag the validated `main` commit and attach the Linux bundle or archive.
+- [ ] Run `Build SmurfPanel release` manually from `main` and test its downloaded artifact.
+- [ ] Create an annotated `vMAJOR.MINOR.PATCH` tag on that exact `main` commit.
+- [ ] Confirm the tag workflow publishes both the Linux archive and checksum.
+- [ ] Download the published files, verify the checksum, install, launch, and uninstall once.

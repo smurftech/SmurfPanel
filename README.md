@@ -297,8 +297,35 @@ the package, builds a wheel, and optionally creates the standalone GUI bundle.
 The hardware, desktop lifecycle, and clean-system checks are documented in
 `RELEASE_CHECKLIST.md`.
 
+## Automated GitHub Releases
+
+The `Build SmurfPanel release` GitHub Actions workflow builds the Linux x86_64
+bundle on Ubuntu 22.04. Pull requests to `dev` and manual runs build and upload
+an artifact without publishing a GitHub Release. Version tags additionally
+publish the validated archive and checksum.
+
+For a release:
+
+1. Update `project.version` in `pyproject.toml` and merge the change through
+   `dev` to `main`.
+2. Run the workflow manually from `main` and test its downloaded artifact.
+3. Tag that exact validated `main` commit:
+
+```bash
+git switch main
+git pull --ff-only origin main
+git tag -a v0.1.0 -m "SmurfPanel v0.1.0"
+git push origin v0.1.0
+```
+
+The tag must exactly match the package version. A mismatch stops the workflow
+before building or publishing. If a job fails transiently, rerun it from the
+Actions page. If code must change, fix it through the normal branch flow and
+use a new patch version; do not move a tag that has already been published.
+
 ## Next Steps
 
 1. Validate the portable archive and udev install flow on a clean Linux system.
 2. Decide whether desktop autostart is sufficient or add a systemd user service.
-3. Automate tagged SmurfPanel release archive publication.
+3. Add additional platform-native packages only after the portable archive is
+   proven across the supported Linux distributions.

@@ -1,0 +1,122 @@
+name: Build SmurfPanel release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+  pull_request:
+    branches:
+      - dev
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: Optional version to validate (defaults to pyproject.toml)
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+jobs:
+  linux-release:
+    name: Linux x86_64 release
+    runs-on: ubuntu-22.04
+    env:
+      RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
+
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install Linux build libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            binutils \
+            libpulse0 \
+            libxcb-cursor0 \
+            libxcb-icccm4 \
+            libxcb-image0 \
+            libxcb-keysyms1 \
+            libxcb-render-util0 \
+            libxcb-util1 \
+            libxcb-xkb1 \
+            libxkbcommon-x11-0
+
+      - name: Install project and release tools
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install ".[dev,build]"
+
+      - name: Resolve release version
+        run: |
+          if [[ -z "$RELEASE_TAG" ]]; then
+            project_version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
+            echo "RELEASE_TAG=v$project_version" >> "$GITHUB_ENV"
+          fi
+
+      - name: Verify tag matches package version
+        run: python scripts/check_release_version.py "$RELEASE_TAG"
+
+      - name: Test and build standalone application
+        run: PCPANEL_PYTHON="$(command -v python)" ./scripts/validate_release.sh --build
+
+      - name: Smoke-test standalone application
+        run: |
+          set +e
+          QT_QPA_PLATFORM=offscreen timeout 5s \
+            ./dist/pcpanel-gui/pcpanel-gui --config config.example.json
+          status=$?
+          set -e
+          if [[ "$status" -ne 124 ]]; then
+            echo "Standalone application exited unexpectedly with status $status" >&2
+            exit 1
+          fi
+
+      - name: Create and verify portable archive
+        run: |
+          bash ./scripts/package_release.sh
+          cd dist
+          sha256sum -c SmurfPanel-*.tar.gz.sha256
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: smurfpanel-linux-release
+          path: |
+            dist/SmurfPanel-*.tar.gz
+            dist/SmurfPanel-*.tar.gz.sha256
+          if-no-files-found: error
+
+  publish-release:
+    name: Publish GitHub release
+    if: github.event_name == 'push'
+    needs: linux-release
+    runs-on: ubuntu-22.04
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download validated release artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: smurfpanel-linux-release
+          path: dist
+
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          gh release create "$RELEASE_TAG" \
+            dist/SmurfPanel-*.tar.gz \
+            dist/SmurfPanel-*.tar.gz.sha256 \
+            --verify-tag \
+            --generate-notes \
+            --title "SmurfPanel $RELEASE_TAG"
