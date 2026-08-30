@@ -176,6 +176,11 @@ cd SmurfPanel-0.1.0-linux-x86_64
 ./install.sh
 ```
 
+Commands are installed under `~/.local/bin`. If that directory is not in the
+current shell `PATH`, the installer prints both a direct launch path and the
+exact `export PATH=...` line needed for the current terminal or shell profile.
+It does not modify shell configuration files automatically.
+
 Use `./install.sh --with-udev` to install the narrowly scoped PCPanel Mini USB
 permission rule at the same time. This option uses `sudo`; the normal user app
 installation does not.

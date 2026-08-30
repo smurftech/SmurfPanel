@@ -68,6 +68,19 @@ echo "Installed SmurfPanel:"
 echo "  App: $APP_DIR/pcpanel-gui"
 echo "  Launcher: $DESKTOP_DIR/smurfpanel.desktop"
 echo "  Commands: smurfpanel, smurfpanel-gui, pcpanel-gui"
+echo "  Launch now: $BIN_DIR/smurfpanel"
+
+case ":$PATH:" in
+  *":$BIN_DIR:"*) ;;
+  *)
+    echo
+    echo "Note: $BIN_DIR is not currently in PATH."
+    echo "For this terminal, run:"
+    echo "  export PATH=\"$BIN_DIR:\$PATH\""
+    echo "To keep it available, add that line to your shell profile and open a new terminal."
+    ;;
+esac
+
 if [[ "$INSTALL_UDEV" == false ]]; then
   echo "PCPanel Mini permissions were not changed."
   echo "Run '$ROOT_DIR/scripts/install_udev_rules.sh' if the device cannot connect."

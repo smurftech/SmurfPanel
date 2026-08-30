@@ -18,6 +18,10 @@ Launch SmurfPanel from the application menu or run:
 
   smurfpanel
 
+The installer places commands in ~/.local/bin. If that directory is not in
+your shell PATH, the installer prints the direct launch command and the exact
+PATH line to add to your shell profile.
+
 Uninstall the app while preserving configuration:
 
   ./uninstall.sh
