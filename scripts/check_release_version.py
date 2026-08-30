@@ -30,7 +30,7 @@ def validate_release_tag(tag: str, version: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Validate the SmurfPanel release tag")
-    parser.add_argument("tag", help="release tag, for example v0.1.0")
+    parser.add_argument("tag", help="release tag, for example v1.0.0")
     args = parser.parse_args()
 
     version = project_version()

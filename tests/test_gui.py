@@ -37,7 +37,7 @@ def test_button_action_label_formats_toggle_outputs() -> None:
 
 
 def test_app_version_returns_package_version() -> None:
-    assert app_version() == "0.1.0"
+    assert app_version() == "1.0.0"
 
 
 def test_display_path_shortens_home_path() -> None:
