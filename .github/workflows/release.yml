@@ -13,6 +13,11 @@ on:
         description: Optional version to validate (defaults to pyproject.toml)
         required: false
         default: ""
+      publish_release:
+        description: Publish the validated artifact to the matching existing tag
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -21,6 +26,8 @@ jobs:
   linux-release:
     name: Linux x86_64 release
     runs-on: ubuntu-22.04
+    outputs:
+      release_tag: ${{ steps.release-version.outputs.release_tag }}
     env:
       RELEASE_TAG: ${{ github.event_name == 'push' && github.ref_name || inputs.release_tag }}
 
@@ -57,11 +64,15 @@ jobs:
           python -m pip install ".[dev,build]"
 
       - name: Resolve release version
+        id: release-version
         run: |
-          if [[ -z "$RELEASE_TAG" ]]; then
+          resolved_tag="$RELEASE_TAG"
+          if [[ -z "$resolved_tag" ]]; then
             project_version="$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
-            echo "RELEASE_TAG=v$project_version" >> "$GITHUB_ENV"
+            resolved_tag="v$project_version"
           fi
+          echo "RELEASE_TAG=$resolved_tag" >> "$GITHUB_ENV"
+          echo "release_tag=$resolved_tag" >> "$GITHUB_OUTPUT"
 
       - name: Verify tag matches package version
         run: python scripts/check_release_version.py "$RELEASE_TAG"
@@ -98,7 +109,7 @@ jobs:
 
   publish-release:
     name: Publish GitHub release
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || inputs.publish_release
     needs: linux-release
     runs-on: ubuntu-22.04
     permissions:
@@ -114,7 +125,8 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_TAG: ${{ needs.linux-release.outputs.release_tag }}
         run: |
           gh release create "$RELEASE_TAG" \
             dist/SmurfPanel-*.tar.gz \

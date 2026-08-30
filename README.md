@@ -328,6 +328,12 @@ before building or publishing. If a job fails transiently, rerun it from the
 Actions page. If code must change, fix it through the normal branch flow and
 use a new patch version; do not move a tag that has already been published.
 
+If a validated tag exists but only the publication job failed, merge the
+workflow fix first, then run the workflow manually from `main`. Enter the
+existing tag in `release_tag` and enable `publish_release`. The workflow
+rebuilds and validates the artifact before publishing, and `--verify-tag`
+prevents publication to a tag that does not exist.
+
 ## Next Steps
 
 1. Validate the portable archive and udev install flow on a clean Linux system.
