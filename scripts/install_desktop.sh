@@ -1,36 +1,74 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-APP_DIR="$HOME/.local/opt/pcpanel-gui"
-BIN_DIR="$HOME/.local/bin"
-DESKTOP_DIR="$HOME/.local/share/applications"
-ICON_DIR="$HOME/.local/share/icons/hicolor/scalable/apps"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [[ -d "$SCRIPT_DIR/packaging" ]]; then
+  ROOT_DIR="$SCRIPT_DIR"
+else
+  ROOT_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
+fi
+if [[ -x "$ROOT_DIR/app/pcpanel-gui" ]]; then
+  BUNDLE_DIR="$ROOT_DIR/app"
+else
+  BUNDLE_DIR="$ROOT_DIR/dist/pcpanel-gui"
+fi
 
-if [[ ! -x "$ROOT_DIR/dist/pcpanel-gui/pcpanel-gui" ]]; then
-  echo "Build not found: $ROOT_DIR/dist/pcpanel-gui/pcpanel-gui" >&2
-  echo "Run: .venv/bin/python -m PyInstaller pcpanel-gui.spec --clean --noconfirm" >&2
+APP_DIR="$HOME/.local/opt/smurfpanel"
+BIN_DIR="$HOME/.local/bin"
+DATA_HOME="${XDG_DATA_HOME:-$HOME/.local/share}"
+DESKTOP_DIR="$DATA_HOME/applications"
+ICON_DIR="$DATA_HOME/icons/hicolor/scalable/apps"
+INSTALL_UDEV=false
+
+for argument in "$@"; do
+  case "$argument" in
+    --with-udev) INSTALL_UDEV=true ;;
+    --help|-h)
+      echo "Usage: $0 [--with-udev]"
+      echo "  --with-udev  Also install PCPanel Mini USB permissions (uses sudo)."
+      exit 0
+      ;;
+    *)
+      echo "Unknown option: $argument" >&2
+      exit 2
+      ;;
+  esac
+done
+
+if [[ ! -x "$BUNDLE_DIR/pcpanel-gui" ]]; then
+  echo "SmurfPanel application bundle not found: $BUNDLE_DIR/pcpanel-gui" >&2
+  echo "Build it with: ./scripts/validate_release.sh --build" >&2
   exit 1
 fi
 
 mkdir -p "$APP_DIR" "$BIN_DIR" "$DESKTOP_DIR" "$ICON_DIR"
 rm -rf "$APP_DIR"
-cp -a "$ROOT_DIR/dist/pcpanel-gui" "$APP_DIR"
+cp -a "$BUNDLE_DIR" "$APP_DIR"
+ln -sfn "$APP_DIR/pcpanel-gui" "$BIN_DIR/smurfpanel"
+ln -sfn "$APP_DIR/pcpanel-gui" "$BIN_DIR/smurfpanel-gui"
 ln -sfn "$APP_DIR/pcpanel-gui" "$BIN_DIR/pcpanel-gui"
-cp "$ROOT_DIR/pcpanel/assets/pcpanel.svg" "$ICON_DIR/pcpanel.svg"
+cp "$ROOT_DIR/pcpanel/assets/pcpanel.svg" "$ICON_DIR/smurfpanel.svg"
 sed "s#__EXEC_PATH__#$APP_DIR/pcpanel-gui#g" \
-  "$ROOT_DIR/packaging/pcpanel-gui.desktop" > "$DESKTOP_DIR/pcpanel-gui.desktop"
-chmod +x "$DESKTOP_DIR/pcpanel-gui.desktop"
+  "$ROOT_DIR/packaging/pcpanel-gui.desktop" > "$DESKTOP_DIR/smurfpanel.desktop"
+chmod +x "$DESKTOP_DIR/smurfpanel.desktop"
 
 if command -v update-desktop-database >/dev/null 2>&1; then
   update-desktop-database "$DESKTOP_DIR" >/dev/null 2>&1 || true
 fi
 
 if command -v gtk-update-icon-cache >/dev/null 2>&1; then
-  gtk-update-icon-cache "$HOME/.local/share/icons/hicolor" >/dev/null 2>&1 || true
+  gtk-update-icon-cache "$DATA_HOME/icons/hicolor" >/dev/null 2>&1 || true
+fi
+
+if [[ "$INSTALL_UDEV" == true ]]; then
+  "$ROOT_DIR/scripts/install_udev_rules.sh"
 fi
 
 echo "Installed SmurfPanel:"
 echo "  App: $APP_DIR/pcpanel-gui"
-echo "  Launcher: $DESKTOP_DIR/pcpanel-gui.desktop"
-echo "  Command: pcpanel-gui"
+echo "  Launcher: $DESKTOP_DIR/smurfpanel.desktop"
+echo "  Commands: smurfpanel, smurfpanel-gui, pcpanel-gui"
+if [[ "$INSTALL_UDEV" == false ]]; then
+  echo "PCPanel Mini permissions were not changed."
+  echo "Run '$ROOT_DIR/scripts/install_udev_rules.sh' if the device cannot connect."
+fi

@@ -151,10 +151,39 @@ Install it into your user application menu:
 ./scripts/install_desktop.sh
 ```
 
+To create a portable archive that can be installed without the source tree or
+a Python environment:
+
+```bash
+./scripts/validate_release.sh --build
+bash ./scripts/package_release.sh
+```
+
+This creates a versioned archive and checksum under `dist/`, for example:
+
+```text
+dist/SmurfPanel-0.1.0-linux-x86_64.tar.gz
+dist/SmurfPanel-0.1.0-linux-x86_64.tar.gz.sha256
+```
+
+On the destination computer, verify, extract, and install it for the current
+user:
+
+```bash
+sha256sum -c SmurfPanel-0.1.0-linux-x86_64.tar.gz.sha256
+tar -xzf SmurfPanel-0.1.0-linux-x86_64.tar.gz
+cd SmurfPanel-0.1.0-linux-x86_64
+./install.sh
+```
+
+Use `./install.sh --with-udev` to install the narrowly scoped PCPanel Mini USB
+permission rule at the same time. This option uses `sudo`; the normal user app
+installation does not.
+
 After installing, launch it from your app menu as `SmurfPanel` or from a terminal:
 
 ```bash
-pcpanel-gui
+smurfpanel
 ```
 
 Editable/package installs also provide the branded `smurfpanel` and
@@ -174,8 +203,11 @@ Uninstall the user-level app:
 ./scripts/uninstall_desktop.sh
 ```
 
-The uninstall script removes the bundled app, app-menu launcher, command
-symlink, and icon. It leaves your config file in place at
+From a portable release directory, use `./uninstall.sh`. Add `--remove-udev`
+to also remove the optional USB permission rule.
+
+The uninstall script removes the bundled app, app-menu launcher, branded and
+legacy command symlinks, and icon. It leaves your config file in place at
 `~/.config/pcpanel/config.json`.
 
 The GUI's `Open on startup` checkbox writes a user autostart launcher at:
@@ -267,6 +299,6 @@ The hardware, desktop lifecycle, and clean-system checks are documented in
 
 ## Next Steps
 
-1. Validate the standalone bundle and udev install flow on a clean Linux system.
+1. Validate the portable archive and udev install flow on a clean Linux system.
 2. Decide whether desktop autostart is sufficient or add a systemd user service.
-3. Automate tagged SmurfPanel release bundles and checksums.
+3. Automate tagged SmurfPanel release archive publication.

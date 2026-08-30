@@ -1,0 +1,30 @@
+SmurfPanel for Linux
+====================
+
+Install for the current user:
+
+  ./install.sh
+
+If SmurfPanel cannot access the PCPanel Mini, install the narrowly scoped USB
+permission rule and reconnect the device:
+
+  ./scripts/install_udev_rules.sh
+
+Alternatively, install the app and permission rule together:
+
+  ./install.sh --with-udev
+
+Launch SmurfPanel from the application menu or run:
+
+  smurfpanel
+
+Uninstall the app while preserving configuration:
+
+  ./uninstall.sh
+
+Also remove the optional USB permission rule:
+
+  ./uninstall.sh --remove-udev
+
+SmurfPanel stores configuration at ~/.config/pcpanel/config.json for backward
+compatibility. Uninstalling does not remove this file.
