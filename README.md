@@ -162,17 +162,17 @@ bash ./scripts/package_release.sh
 This creates a versioned archive and checksum under `dist/`, for example:
 
 ```text
-dist/SmurfPanel-0.1.0-linux-x86_64.tar.gz
-dist/SmurfPanel-0.1.0-linux-x86_64.tar.gz.sha256
+dist/SmurfPanel-1.0.0-linux-x86_64.tar.gz
+dist/SmurfPanel-1.0.0-linux-x86_64.tar.gz.sha256
 ```
 
 On the destination computer, verify, extract, and install it for the current
 user:
 
 ```bash
-sha256sum -c SmurfPanel-0.1.0-linux-x86_64.tar.gz.sha256
-tar -xzf SmurfPanel-0.1.0-linux-x86_64.tar.gz
-cd SmurfPanel-0.1.0-linux-x86_64
+sha256sum -c SmurfPanel-1.0.0-linux-x86_64.tar.gz.sha256
+tar -xzf SmurfPanel-1.0.0-linux-x86_64.tar.gz
+cd SmurfPanel-1.0.0-linux-x86_64
 ./install.sh
 ```
 
@@ -319,8 +319,8 @@ For a release:
 ```bash
 git switch main
 git pull --ff-only origin main
-git tag -a v0.1.0 -m "SmurfPanel v0.1.0"
-git push origin v0.1.0
+git tag -a v1.0.0 -m "SmurfPanel v1.0.0"
+git push origin v1.0.0
 ```
 
 The tag must exactly match the package version. A mismatch stops the workflow
