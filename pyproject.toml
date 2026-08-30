@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pcpanel"
-version = "0.1.0"
+version = "1.0.0"
 description = "SmurfPanel low-latency controller for PCPanel Mini hardware"
 requires-python = ">=3.11"
 dependencies = [
