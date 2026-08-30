@@ -49,7 +49,13 @@ def test_portable_installer_lifecycle_preserves_config(tmp_path: Path) -> None:
     config.write_text("{}\n", encoding="utf-8")
     environment = {**os.environ, "HOME": str(home), "XDG_DATA_HOME": str(data_home)}
 
-    subprocess.run(["bash", str(release / "install.sh")], env=environment, check=True)
+    install = subprocess.run(
+        ["bash", str(release / "install.sh")],
+        env=environment,
+        check=True,
+        capture_output=True,
+        text=True,
+    )
 
     installed_app = home / ".local" / "opt" / "smurfpanel" / "pcpanel-gui"
     assert installed_app.is_file()
@@ -59,6 +65,9 @@ def test_portable_installer_lifecycle_preserves_config(tmp_path: Path) -> None:
     launcher = (data_home / "applications" / "smurfpanel.desktop").read_text(encoding="utf-8")
     assert f"Exec={installed_app}" in launcher
     assert "Icon=smurfpanel" in launcher
+    assert f"Launch now: {home}/.local/bin/smurfpanel" in install.stdout
+    assert f"Note: {home}/.local/bin is not currently in PATH." in install.stdout
+    assert 'export PATH="' in install.stdout
 
     subprocess.run(["bash", str(release / "uninstall.sh")], env=environment, check=True)
 
