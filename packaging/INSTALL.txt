@@ -10,6 +10,9 @@ permission rule and reconnect the device:
 
   ./scripts/install_udev_rules.sh
 
+The rule matches only PCPanel Mini device 0483:a3c4 and works on systems both
+with and without systemd-logind uaccess ACL handling.
+
 Alternatively, install the app and permission rule together:
 
   ./install.sh --with-udev
