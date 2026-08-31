@@ -71,5 +71,6 @@ def test_usb_permission_error_is_actionable() -> None:
     message = usb_permission_error_message()
 
     assert "0483:a3c4" in message
+    assert "./install.sh --with-udev" in message
     assert "scripts/install_udev_rules.sh" in message
     assert "unplug" in message.lower()

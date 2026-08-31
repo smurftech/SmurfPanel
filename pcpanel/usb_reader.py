@@ -206,8 +206,9 @@ def reconnect_delay_for_attempt(failure_count: int) -> float:
 def usb_permission_error_message() -> str:
     return (
         "Permission denied opening PCPanel Mini USB device 0483:a3c4. "
-        "Install the udev rule with scripts/install_udev_rules.sh, then unplug "
-        "and reconnect the device."
+        "Install USB permissions with './install.sh --with-udev' from a release "
+        "or scripts/install_udev_rules.sh from the source tree, then unplug and "
+        "reconnect the device."
     )
 
 
