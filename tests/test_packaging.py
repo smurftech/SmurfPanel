@@ -12,6 +12,7 @@ def test_udev_rule_is_scoped_to_supported_device() -> None:
 
     assert 'ATTR{idVendor}=="0483"' in rule
     assert 'ATTR{idProduct}=="a3c4"' in rule
+    assert 'MODE="0666"' in rule
     assert 'TAG+="uaccess"' in rule
 
 
